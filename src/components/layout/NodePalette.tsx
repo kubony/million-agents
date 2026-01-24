@@ -1,4 +1,4 @@
-import { MessageSquare, Sparkles, BarChart3, PlusSquare } from 'lucide-react';
+import { MessageSquare, Sparkles, BarChart3, Zap, Plug } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { nanoid } from 'nanoid';
 import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, McpNodeData, OutputNodeData } from '../../types/nodes';
@@ -21,10 +21,24 @@ const paletteItems: PaletteItem[] = [
   },
   {
     type: 'subagent',
-    label: 'Generate',
+    label: 'Sub Agent',
     icon: <Sparkles className="w-4 h-4" />,
     color: 'text-purple-400',
     hoverColor: 'hover:bg-purple-500/10',
+  },
+  {
+    type: 'skill',
+    label: 'Skill',
+    icon: <Zap className="w-4 h-4" />,
+    color: 'text-cyan-400',
+    hoverColor: 'hover:bg-cyan-500/10',
+  },
+  {
+    type: 'mcp',
+    label: 'MCP',
+    icon: <Plug className="w-4 h-4" />,
+    color: 'text-pink-400',
+    hoverColor: 'hover:bg-pink-500/10',
   },
   {
     type: 'output',
@@ -32,13 +46,6 @@ const paletteItems: PaletteItem[] = [
     icon: <BarChart3 className="w-4 h-4" />,
     color: 'text-emerald-400',
     hoverColor: 'hover:bg-emerald-500/10',
-  },
-  {
-    type: 'skill',
-    label: 'Add Assets',
-    icon: <PlusSquare className="w-4 h-4" />,
-    color: 'text-cyan-400',
-    hoverColor: 'hover:bg-cyan-500/10',
   },
 ];
 
@@ -66,7 +73,7 @@ function createDefaultNodeData(type: PaletteItem['type']): WorkflowNode {
         type: 'subagent',
         position,
         data: {
-          label: 'Generate',
+          label: 'Sub Agent',
           description: 'Conduct in-depth research...',
           role: 'researcher',
           tools: ['WebSearch', 'WebFetch', 'Read'],

@@ -171,53 +171,87 @@ body {
   border-top: 1px solid #374151;
 }
 
-/* Handle styles */
+/* Handle styles - 자석 효과를 위한 큰 히트 영역 */
 .react-flow__handle {
-  width: 12px;
-  height: 12px;
-  border: 2px solid white;
+  width: 14px;
+  height: 14px;
+  border: 3px solid white;
   background-color: #6b7280;
-  transition: all 0.15s ease;
-  box-shadow: 0 0 0 0 transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  cursor: crosshair;
+}
+
+/* 핸들 주변에 보이지 않는 히트 영역 추가 */
+.react-flow__handle::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  right: -12px;
+  bottom: -12px;
+  border-radius: 50%;
 }
 
 .react-flow__handle:hover {
-  transform: scale(1.25);
+  transform: scale(1.4);
   background-color: #8b5cf6;
-  box-shadow: 0 0 8px 2px rgba(139, 92, 246, 0.5);
+  border-color: #c4b5fd;
+  box-shadow:
+    0 0 12px 4px rgba(139, 92, 246, 0.6),
+    0 0 24px 8px rgba(139, 92, 246, 0.3);
 }
 
 .react-flow__handle-left {
-  left: -6px;
+  left: -7px;
 }
 
 .react-flow__handle-right {
-  right: -6px;
+  right: -7px;
 }
 
 /* 연결 시작 핸들 - 보라색 펄스 */
 .react-flow__handle.connectingfrom {
   background-color: #8b5cf6;
-  transform: scale(1.3);
-  box-shadow: 0 0 12px 4px rgba(139, 92, 246, 0.6);
-  animation: handle-pulse 1s ease-in-out infinite;
+  border-color: #c4b5fd;
+  transform: scale(1.5);
+  box-shadow:
+    0 0 16px 6px rgba(139, 92, 246, 0.7),
+    0 0 32px 12px rgba(139, 92, 246, 0.3);
+  animation: handle-pulse 0.8s ease-in-out infinite;
 }
 
-/* 연결 중 - 유효한 타겟 핸들 */
-.react-flow__handle.connectingto {
+/* 연결 중 - 유효한 타겟 핸들 (자석 효과) */
+.react-flow__handle.connectingto,
+.react-flow__handle-left.connecting,
+.react-flow__handle-right.connecting {
   background-color: #22c55e;
   border-color: #86efac;
-  transform: scale(1.25);
-  box-shadow: 0 0 12px 4px rgba(34, 197, 94, 0.5);
-  animation: handle-glow 0.8s ease-in-out infinite;
+  transform: scale(1.6);
+  box-shadow:
+    0 0 16px 6px rgba(34, 197, 94, 0.7),
+    0 0 32px 12px rgba(34, 197, 94, 0.4);
+  animation: handle-magnet 0.5s ease-in-out infinite;
 }
 
 /* 연결 유효성 시각화 */
 .react-flow__handle.valid {
   background-color: #22c55e;
   border-color: #86efac;
-  transform: scale(1.4);
-  box-shadow: 0 0 16px 6px rgba(34, 197, 94, 0.7);
+  transform: scale(1.6);
+  box-shadow:
+    0 0 20px 8px rgba(34, 197, 94, 0.8),
+    0 0 40px 16px rgba(34, 197, 94, 0.4);
+}
+
+/* 자석 효과 애니메이션 */
+@keyframes handle-magnet {
+  0%, 100% {
+    transform: scale(1.6);
+  }
+  50% {
+    transform: scale(1.8);
+  }
 }
 
 /* 핸들 펄스 애니메이션 */

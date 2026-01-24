@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { ArrowLeft, Share2, Settings, Save, Download } from 'lucide-react';
+import { ArrowLeft, Settings, Save, Download, Play, Square } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
 import SaveDialog from '../dialogs/SaveDialog';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
   const { workflowName, setWorkflowName, isDraft, nodes, edges } = useWorkflowStore();
+  const { isRunning, execute, cancel } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
 
@@ -19,6 +21,14 @@ export default function Header() {
   const handleCloseDialog = () => {
     setIsSaveDialogOpen(false);
     setExportConfig(null);
+  };
+
+  const handleRun = () => {
+    if (isRunning) {
+      cancel();
+    } else {
+      execute();
+    }
   };
 
   return (
@@ -45,14 +55,9 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Center section - App/Editor toggle */}
-      <div className="flex items-center gap-1 p-1 bg-surface-hover rounded-lg">
-        <button className="px-4 py-1.5 text-sm font-medium text-gray-400 hover:text-white rounded-md transition-colors">
-          App
-        </button>
-        <button className="px-4 py-1.5 text-sm font-medium bg-accent text-white rounded-md">
-          Editor
-        </button>
+      {/* Center section - Title */}
+      <div className="text-sm font-medium text-gray-400">
+        Visual Workflow Builder
       </div>
 
       {/* Right section */}
@@ -60,16 +65,25 @@ export default function Header() {
         <span className="text-sm text-gray-500">Saved</span>
 
         <button
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors"
+          onClick={handleRun}
+          className={`
+            flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+            ${isRunning
+              ? 'bg-red-500 hover:bg-red-600 text-white'
+              : 'bg-accent hover:bg-accent-hover text-white'
+            }
+          `}
         >
-          <Download className="w-4 h-4" />
-          <span className="text-sm font-medium">Export</span>
+          {isRunning ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          {isRunning ? 'Stop' : 'Run'}
         </button>
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-surface-hover hover:bg-border rounded-lg transition-colors">
-          <Share2 className="w-4 h-4" />
-          <span className="text-sm font-medium">Share App</span>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 px-3 py-2 bg-surface-hover hover:bg-border rounded-lg transition-colors"
+        >
+          <Download className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-300">Export</span>
         </button>
 
         <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">

@@ -1,14 +1,38 @@
 import { useState } from 'react';
-import { Mic, Send } from 'lucide-react';
+import { Sparkles, Send, Loader2 } from 'lucide-react';
+import { useWorkflowStore } from '../../stores/workflowStore';
+import { generateAndEnhanceWorkflow } from '../../services/workflowGenerator';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { loadWorkflow, workflowName } = useWorkflowStore();
 
-  const handleSubmit = () => {
-    if (!prompt.trim()) return;
-    // TODO: Handle prompt submission (AI workflow generation)
-    console.log('Submitted prompt:', prompt);
-    setPrompt('');
+  const handleSubmit = async () => {
+    if (!prompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+
+    try {
+      // Simulate a brief delay for UX
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Generate workflow from prompt
+      const generatedWorkflow = generateAndEnhanceWorkflow(prompt);
+
+      // Load the generated workflow
+      loadWorkflow({
+        nodes: generatedWorkflow.nodes,
+        edges: generatedWorkflow.edges,
+        name: workflowName === 'Untitled Workflow' ? prompt.slice(0, 30) : workflowName,
+      });
+
+      setPrompt('');
+    } catch (error) {
+      console.error('Failed to generate workflow:', error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -19,39 +43,39 @@ export default function PromptBar() {
   };
 
   return (
-    <div className="bg-surface border border-border rounded-full px-6 py-3 shadow-2xl flex items-center gap-4">
+    <div className="bg-surface border border-border rounded-2xl px-5 py-3 shadow-2xl flex items-center gap-3">
+      <Sparkles className="w-5 h-5 text-accent flex-shrink-0" />
+
       <input
         type="text"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Edit these steps"
-        className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500"
+        placeholder="Describe your workflow... (e.g., 'Create an HTML page with images')"
+        className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 text-sm"
+        disabled={isGenerating}
       />
 
       <button
-        className="p-2 text-gray-400 hover:text-white hover:bg-surface-hover rounded-full transition-colors"
-        title="Voice input"
-      >
-        <Mic className="w-5 h-5" />
-      </button>
-
-      <button
         onClick={handleSubmit}
-        disabled={!prompt.trim()}
-        className={`p-2 rounded-full transition-colors ${
-          prompt.trim()
-            ? 'bg-accent text-white hover:bg-accent-hover'
+        disabled={!prompt.trim() || isGenerating}
+        className={`p-2 rounded-full transition-all duration-200 ${
+          prompt.trim() && !isGenerating
+            ? 'bg-accent text-white hover:bg-accent-hover hover:scale-105'
             : 'bg-surface-hover text-gray-500'
         }`}
-        title="Send"
+        title="Generate Workflow"
       >
-        <Send className="w-5 h-5" />
+        {isGenerating ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <Send className="w-5 h-5" />
+        )}
       </button>
 
       {/* Disclaimer */}
       <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-gray-600">
-        Claude can make mistakes, so double-check it
+        AI will generate a workflow based on your description
       </div>
     </div>
   );
