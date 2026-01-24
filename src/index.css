@@ -61,6 +61,20 @@ body {
   background-color: var(--canvas-bg) !important;
 }
 
+/* 노드 래퍼 배경 투명 처리 - 흰색 박스 제거 */
+.react-flow__node {
+  background: transparent !important;
+}
+
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-group {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
 .react-flow__minimap {
   background-color: var(--surface) !important;
   border: 1px solid var(--border) !important;
@@ -171,14 +185,14 @@ body {
   border-top: 1px solid #374151;
 }
 
-/* Handle styles - 자석 효과를 위한 큰 히트 영역 */
+/* Handle styles - 더 큰 연결 포인트 */
 .react-flow__handle {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   border: 3px solid white;
   background-color: #6b7280;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   cursor: crosshair;
 }
 
@@ -186,28 +200,28 @@ body {
 .react-flow__handle::before {
   content: '';
   position: absolute;
-  top: -12px;
-  left: -12px;
-  right: -12px;
-  bottom: -12px;
+  top: -16px;
+  left: -16px;
+  right: -16px;
+  bottom: -16px;
   border-radius: 50%;
 }
 
 .react-flow__handle:hover {
-  transform: scale(1.4);
+  transform: scale(1.3);
   background-color: #8b5cf6;
   border-color: #c4b5fd;
   box-shadow:
-    0 0 12px 4px rgba(139, 92, 246, 0.6),
-    0 0 24px 8px rgba(139, 92, 246, 0.3);
+    0 0 16px 6px rgba(139, 92, 246, 0.6),
+    0 0 28px 10px rgba(139, 92, 246, 0.3);
 }
 
 .react-flow__handle-left {
-  left: -7px;
+  left: -10px;
 }
 
 .react-flow__handle-right {
-  right: -7px;
+  right: -10px;
 }
 
 /* 연결 시작 핸들 - 보라색 펄스 */
