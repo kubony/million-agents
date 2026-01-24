@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Custom theme configuration */
+@theme {
+  --color-canvas: #0d0d0d;
+  --color-surface: #1a1a1a;
+  --color-surface-hover: #262626;
+  --color-border: #333333;
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #7c3aed;
+
+  /* Node colors */
+  --color-node-input: #fef3c7;
+  --color-node-input-border: #fcd34d;
+  --color-node-generate: #4f46e5;
+  --color-node-generate-bg: #2e2a5a;
+  --color-node-skill: #06b6d4;
+  --color-node-skill-bg: #164e63;
+  --color-node-mcp: #ec4899;
+  --color-node-mcp-bg: #500724;
+  --color-node-output: #10b981;
+  --color-node-output-bg: #064e3b;
+}
+
+/* Base styles */
+:root {
+  --canvas-bg: #0d0d0d;
+  --surface: #1a1a1a;
+  --surface-hover: #262626;
+  --border: #333333;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--canvas-bg);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* React Flow custom styles */
+.react-flow {
+  background-color: var(--canvas-bg) !important;
+}
+
+.react-flow__background {
+  background-color: var(--canvas-bg) !important;
+}
+
+.react-flow__minimap {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px;
+}
+
+.react-flow__controls {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background-color: var(--surface) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+  fill: var(--text-secondary) !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+/* Custom edge styles */
+.react-flow__edge-path {
+  stroke: #4b5563 !important;
+  stroke-width: 2 !important;
+  stroke-dasharray: 5 5;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #8b5cf6 !important;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Node base styles */
+.workflow-node {
+  border-radius: 12px;
+  border-width: 2px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.workflow-node:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.workflow-node.selected {
+  ring: 2px;
+  ring-offset: 2px;
+}
+
+/* Handle styles */
+.react-flow__handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  background-color: #6b7280;
+  transition: all 0.15s ease;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.25);
+  background-color: #8b5cf6;
+}
+
+.react-flow__handle-left {
+  left: -6px;
+}
+
+.react-flow__handle-right {
+  right: -6px;
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444444;
+}
+
+/* Animation utilities */
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: currentColor;
+  }
+  50% {
+    border-color: transparent;
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+/* Markdown content */
+.markdown-content {
+  color: #e5e7eb;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  color: #ffffff;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-content p {
+  margin-bottom: 1em;
+}
+
+.markdown-content pre {
+  background-color: var(--surface);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.markdown-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
