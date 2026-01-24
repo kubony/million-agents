@@ -17,3 +17,4 @@ __pycache__/
 .creds/
 .credentials/
 .mcp.json
+dist/
