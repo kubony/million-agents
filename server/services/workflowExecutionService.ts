@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { skillExecutionService } from './skillExecutionService';
 import type {
   ExecutionNode,
   SubagentNodeData,
@@ -224,7 +225,7 @@ ${previousResults || '(없음)'}
   }
 
   /**
-   * Skill 노드 실행 - 특화된 스킬 실행
+   * Skill 노드 실행 - skillExecutionService 사용
    */
   private async executeSkillNode(
     node: ExecutionNode,
@@ -233,230 +234,35 @@ ${previousResults || '(없음)'}
     onLog?: LogCallback
   ): Promise<ExecutionResult> {
     const data = node.data as SkillNodeData;
-    const skillId = data.skillId;
+    const skillId = data.skillId || 'generic';
 
     onProgress?.({ nodeId: node.id, status: 'running', progress: 10 });
-    onLog?.('info', `스킬 "${skillId}" 실행 중...`);
-
-    switch (skillId) {
-      case 'image-gen-nanobanana':
-        return this.executeImageGenerationSkill(node, previousResults, onProgress, onLog);
-
-      case 'ppt-generator':
-        return this.executePptGeneratorSkill(node, previousResults, onProgress, onLog);
-
-      default:
-        // 일반 스킬: Claude를 사용해 스킬 작업 수행
-        return this.executeGenericSkill(node, previousResults, onProgress, onLog);
-    }
-  }
-
-  /**
-   * 이미지 생성 스킬 (상세페이지 이미지 세트)
-   */
-  private async executeImageGenerationSkill(
-    node: ExecutionNode,
-    previousResults: string,
-    onProgress?: ProgressCallback,
-    onLog?: LogCallback
-  ): Promise<ExecutionResult> {
-    onLog?.('info', '상세페이지 이미지 세트 생성 중...');
-
-    // 1단계: Claude로 이미지 프롬프트 생성
-    const promptGenerationMsg = `당신은 상세페이지 이미지 기획 전문가입니다.
-
-## 요청 내용
-${previousResults}
-
-## 작업
-위 요청을 바탕으로 상세페이지에 필요한 이미지 세트를 기획해주세요.
-
-다음 형식으로 각 이미지에 대한 상세 프롬프트를 작성해주세요:
-
-### 1. 메인 배너 이미지 (1920x600)
-- 목적: [이미지 목적]
-- 프롬프트: [상세한 이미지 생성 프롬프트 - 영문으로]
-- 스타일: [스타일 키워드]
-
-### 2. 상품 메인 이미지 (800x800)
-- 목적: [이미지 목적]
-- 프롬프트: [상세한 이미지 생성 프롬프트 - 영문으로]
-- 스타일: [스타일 키워드]
-
-### 3. 라이프스타일 이미지 (1200x800)
-- 목적: [이미지 목적]
-- 프롬프트: [상세한 이미지 생성 프롬프트 - 영문으로]
-- 스타일: [스타일 키워드]
-
-### 4. 특징/기능 설명 이미지 (600x400) x 3개
-- 각 이미지별 프롬프트 작성
-
-프롬프트는 반드시 영문으로 작성하고, 구체적이고 시각적으로 묘사해주세요.`;
 
     try {
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 20 });
-
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: promptGenerationMsg }],
-      });
-
-      const imagePrompts = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n');
-
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 50 });
-
-      // 2단계: Gemini API로 실제 이미지 생성 (API 키가 있는 경우)
-      const generatedFiles: Array<{ path: string; type: string; name: string }> = [];
-
-      if (process.env.GEMINI_API_KEY) {
-        onLog?.('info', 'Gemini API로 이미지 생성 중...');
-        // TODO: Gemini API 이미지 생성 구현
-        // 현재는 프롬프트만 반환
-      } else {
-        onLog?.('warn', 'GEMINI_API_KEY가 설정되지 않아 이미지 프롬프트만 생성합니다.');
-      }
-
-      // 결과 파일 저장
-      const resultPath = join(this.outputDir, 'image-prompts.md');
-      await writeFile(resultPath, `# 상세페이지 이미지 세트 프롬프트\n\n${imagePrompts}`, 'utf-8');
-
-      generatedFiles.push({
-        path: resultPath,
-        type: 'markdown',
-        name: '이미지 프롬프트',
-      });
+      // skillExecutionService를 사용하여 실제 파일 생성
+      const result = await skillExecutionService.execute(
+        skillId,
+        previousResults,
+        this.outputDir,
+        onLog
+      );
 
       onProgress?.({ nodeId: node.id, status: 'running', progress: 100 });
 
       return {
         nodeId: node.id,
-        success: true,
-        result: imagePrompts,
-        files: generatedFiles,
+        success: result.success,
+        result: result.result,
+        files: result.files,
+        error: result.error,
       };
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '스킬 실행 실패';
+      onLog?.('error', errorMsg);
       return {
         nodeId: node.id,
         success: false,
-        error: error instanceof Error ? error.message : '이미지 생성 실패',
-      };
-    }
-  }
-
-  /**
-   * PPT 생성 스킬
-   */
-  private async executePptGeneratorSkill(
-    node: ExecutionNode,
-    previousResults: string,
-    onProgress?: ProgressCallback,
-    onLog?: LogCallback
-  ): Promise<ExecutionResult> {
-    onLog?.('info', 'PPT 콘텐츠 생성 중...');
-
-    const pptPrompt = `당신은 프레젠테이션 전문가입니다.
-
-## 요청 내용
-${previousResults}
-
-## 작업
-위 내용을 바탕으로 전문적인 프레젠테이션 슬라이드 구성을 작성해주세요.
-
-각 슬라이드에 대해 다음 형식으로 작성:
-
-### 슬라이드 1: [제목]
-- 메인 텍스트: [핵심 내용]
-- 서브 텍스트: [보조 설명]
-- 비주얼 가이드: [권장 이미지/그래픽 설명]
-- 스피커 노트: [발표 시 참고 내용]
-
-전체 10-15개 슬라이드로 구성해주세요.`;
-
-    try {
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 30 });
-
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: pptPrompt }],
-      });
-
-      const pptContent = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n');
-
-      // 결과 파일 저장
-      const resultPath = join(this.outputDir, 'presentation.md');
-      await writeFile(resultPath, `# 프레젠테이션 슬라이드\n\n${pptContent}`, 'utf-8');
-
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 100 });
-
-      return {
-        nodeId: node.id,
-        success: true,
-        result: pptContent,
-        files: [{ path: resultPath, type: 'markdown', name: 'PPT 슬라이드' }],
-      };
-    } catch (error) {
-      return {
-        nodeId: node.id,
-        success: false,
-        error: error instanceof Error ? error.message : 'PPT 생성 실패',
-      };
-    }
-  }
-
-  /**
-   * 일반 스킬 실행 (Claude 기반)
-   */
-  private async executeGenericSkill(
-    node: ExecutionNode,
-    previousResults: string,
-    onProgress?: ProgressCallback,
-    onLog?: LogCallback
-  ): Promise<ExecutionResult> {
-    const data = node.data as SkillNodeData;
-
-    const skillPrompt = `스킬: ${data.label}
-설명: ${data.description || ''}
-
-## 이전 단계 결과
-${previousResults}
-
-## 스킬 내용
-${data.mdContent || '주어진 작업을 수행해주세요.'}
-
-위 내용을 바탕으로 작업을 수행하고 결과를 제공해주세요.`;
-
-    try {
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 50 });
-
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: skillPrompt }],
-      });
-
-      const result = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n');
-
-      return {
-        nodeId: node.id,
-        success: true,
-        result,
-      };
-    } catch (error) {
-      return {
-        nodeId: node.id,
-        success: false,
-        error: error instanceof Error ? error.message : '스킬 실행 실패',
+        error: errorMsg,
       };
     }
   }

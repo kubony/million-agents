@@ -86,7 +86,7 @@ export function useWorkflowExecution() {
       stopExecution();
       addLog('success', '워크플로우 실행 완료!');
 
-      // Auto-download files
+      // Log generated files
       if (files.length > 0) {
         addLog('info', `${files.length}개 파일 생성됨`);
         files.forEach((file) => {

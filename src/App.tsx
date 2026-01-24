@@ -1,14 +1,27 @@
+import { useState, useEffect } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { Terminal } from 'lucide-react';
 import Header from './components/layout/Header';
 import NodePalette from './components/layout/NodePalette';
 import FlowCanvas from './components/canvas/FlowCanvas';
 import RightPanel from './components/layout/RightPanel';
 import PromptBar from './components/layout/PromptBar';
+import ConsolePanel from './components/panels/ConsolePanel';
 import { usePanelStore } from './stores/panelStore';
+import { useExecutionStore } from './stores/executionStore';
 
 function App() {
   const { isCollapsed, width } = usePanelStore();
+  const { isRunning, logs } = useExecutionStore();
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+
+  // Auto-open console when workflow starts running
+  useEffect(() => {
+    if (isRunning) {
+      setIsConsoleOpen(true);
+    }
+  }, [isRunning]);
 
   return (
     <ReactFlowProvider>
@@ -44,6 +57,30 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Console Toggle Button */}
+        <button
+          onClick={() => setIsConsoleOpen(!isConsoleOpen)}
+          className={`fixed bottom-4 left-4 z-40 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all ${
+            isConsoleOpen
+              ? 'bg-amber-600 text-white'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+          } ${isConsoleOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span className="text-sm font-medium">Console</span>
+          {logs.length > 0 && !isConsoleOpen && (
+            <span className="px-1.5 py-0.5 text-xs bg-amber-500 text-white rounded-full">
+              {logs.length}
+            </span>
+          )}
+          {isRunning && (
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+          )}
+        </button>
+
+        {/* Console Panel */}
+        <ConsolePanel isOpen={isConsoleOpen} onClose={() => setIsConsoleOpen(false)} />
       </div>
     </ReactFlowProvider>
   );

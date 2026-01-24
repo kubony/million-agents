@@ -365,7 +365,10 @@ export function generateWorkflowFromPrompt(prompt: string): GeneratedWorkflow {
     previousNodeIds.push(node.id);
   });
 
-  return { nodes, edges };
+  // 트리 레이아웃 적용
+  const layoutedNodes = applyTreeLayout(nodes, edges);
+
+  return { nodes: layoutedNodes, edges };
 }
 
 // Parse prompt to extract more specific configurations
@@ -439,25 +442,132 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
 }
 
 /**
+ * 트리/병렬 레이아웃 알고리즘
+ * 엣지 관계를 분석하여 노드를 트리 구조로 배치
+ * @param nodes - 레이아웃을 적용할 노드 배열
+ * @param edges - 노드 간 연결 정보
+ * @returns 새로운 위치가 적용된 노드 배열
+ */
+export function applyTreeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[]
+): WorkflowNode[] {
+  if (nodes.length === 0) return nodes;
+
+  const xSpacing = 300;
+  const ySpacing = 150;
+  const startX = 100;
+  const startY = 100;
+
+  // 각 노드의 incoming/outgoing 엣지 맵 생성
+  const incomingEdges = new Map<string, string[]>();
+  const outgoingEdges = new Map<string, string[]>();
+
+  nodes.forEach((node) => {
+    incomingEdges.set(node.id, []);
+    outgoingEdges.set(node.id, []);
+  });
+
+  edges.forEach((edge) => {
+    const incoming = incomingEdges.get(edge.target) || [];
+    incoming.push(edge.source);
+    incomingEdges.set(edge.target, incoming);
+
+    const outgoing = outgoingEdges.get(edge.source) || [];
+    outgoing.push(edge.target);
+    outgoingEdges.set(edge.source, outgoing);
+  });
+
+  // 루트 노드 찾기 (incoming edge가 없는 노드)
+  const rootNodes = nodes.filter(
+    (node) => (incomingEdges.get(node.id) || []).length === 0
+  );
+
+  // BFS로 각 노드의 depth 계산
+  const nodeDepths = new Map<string, number>();
+  const queue: { id: string; depth: number }[] = [];
+
+  // 루트 노드들의 depth를 0으로 설정
+  rootNodes.forEach((node) => {
+    nodeDepths.set(node.id, 0);
+    queue.push({ id: node.id, depth: 0 });
+  });
+
+  // 루트 노드가 없는 경우 (사이클이 있는 경우) 첫 번째 노드를 루트로
+  if (rootNodes.length === 0 && nodes.length > 0) {
+    nodeDepths.set(nodes[0].id, 0);
+    queue.push({ id: nodes[0].id, depth: 0 });
+  }
+
+  // BFS 실행
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const children = outgoingEdges.get(current.id) || [];
+
+    children.forEach((childId) => {
+      const existingDepth = nodeDepths.get(childId);
+      const newDepth = current.depth + 1;
+
+      // 더 깊은 depth로 업데이트 (여러 부모가 있을 때 가장 깊은 값 사용)
+      if (existingDepth === undefined || newDepth > existingDepth) {
+        nodeDepths.set(childId, newDepth);
+        queue.push({ id: childId, depth: newDepth });
+      }
+    });
+  }
+
+  // depth별로 노드 그룹화
+  const nodesByDepth = new Map<number, string[]>();
+  nodeDepths.forEach((depth, nodeId) => {
+    const nodesAtDepth = nodesByDepth.get(depth) || [];
+    nodesAtDepth.push(nodeId);
+    nodesByDepth.set(depth, nodesAtDepth);
+  });
+
+  // 각 depth에서 노드들의 Y 위치 계산
+  const maxDepth = Math.max(...Array.from(nodeDepths.values()), 0);
+  const nodePositions = new Map<string, { x: number; y: number }>();
+
+  for (let depth = 0; depth <= maxDepth; depth++) {
+    const nodesAtDepth = nodesByDepth.get(depth) || [];
+    const nodeCount = nodesAtDepth.length;
+
+    // Y 위치를 중앙에서 분산
+    const totalHeight = (nodeCount - 1) * ySpacing;
+    const startYForDepth = startY + (300 - totalHeight) / 2; // 300은 캔버스 중앙 기준
+
+    nodesAtDepth.forEach((nodeId, index) => {
+      nodePositions.set(nodeId, {
+        x: startX + depth * xSpacing,
+        y: startYForDepth + index * ySpacing,
+      });
+    });
+  }
+
+  // 노드에 새 위치 적용
+  return nodes.map((node) => {
+    const position = nodePositions.get(node.id) || node.position;
+    return {
+      ...node,
+      position,
+    };
+  });
+}
+
+/**
  * AI 응답을 React Flow 워크플로우로 변환
  */
 function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkflow {
   const nodes: WorkflowNode[] = [];
   const nodeIdMap: Map<number, string> = new Map();
 
-  const xSpacing = 300;
-  const startX = 100;
-  const centerY = 200;
+  // 임시 위치로 노드 생성 (트리 레이아웃에서 재계산됨)
+  const tempPosition = { x: 0, y: 0 };
 
   // 노드 생성
   aiResult.nodes.forEach((aiNode, index) => {
     const id = nanoid();
     nodeIdMap.set(index, id);
-
-    const position = {
-      x: startX + index * xSpacing,
-      y: centerY,
-    };
 
     const baseData = {
       label: aiNode.label,
@@ -471,7 +581,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         nodes.push({
           id,
           type: 'input',
-          position,
+          position: { ...tempPosition },
           data: {
             ...baseData,
             inputType: aiNode.config.inputType || 'text',
@@ -484,7 +594,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         nodes.push({
           id,
           type: 'subagent',
-          position,
+          position: { ...tempPosition },
           data: {
             ...baseData,
             role: (aiNode.config.role as AgentRole) || 'custom',
@@ -499,7 +609,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         nodes.push({
           id,
           type: 'skill',
-          position,
+          position: { ...tempPosition },
           data: {
             ...baseData,
             skillType: aiNode.config.skillType || 'official',
@@ -513,7 +623,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         nodes.push({
           id,
           type: 'mcp',
-          position,
+          position: { ...tempPosition },
           data: {
             ...baseData,
             serverType: 'stdio',
@@ -527,7 +637,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         nodes.push({
           id,
           type: 'output',
-          position,
+          position: { ...tempPosition },
           data: {
             ...baseData,
             outputType: aiNode.config.outputType || 'auto',
@@ -565,5 +675,8 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
     })
     .filter((edge): edge is WorkflowEdge => edge !== null);
 
-  return { nodes, edges };
+  // 트리 레이아웃 적용
+  const layoutedNodes = applyTreeLayout(nodes, edges);
+
+  return { nodes: layoutedNodes, edges };
 }
