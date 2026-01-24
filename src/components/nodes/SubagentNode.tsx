@@ -13,8 +13,8 @@ function SubagentNode({ data, selected }: SubagentNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Sparkles className="w-4 h-4 text-indigo-200" />}
-      headerColor="bg-indigo-600"
+      headerIcon={<Sparkles className="w-4 h-4 text-violet-100" />}
+      headerColor="bg-gradient-to-br from-violet-500 to-purple-700"
       showTargetHandle={true}
       showSourceHandle={true}
     >

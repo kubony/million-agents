@@ -18,3 +18,4 @@ __pycache__/
 .credentials/
 .mcp.json
 dist/
+output/

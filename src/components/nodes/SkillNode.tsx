@@ -13,8 +13,8 @@ function SkillNode({ data, selected }: SkillNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Zap className="w-4 h-4 text-cyan-200" />}
-      headerColor="bg-cyan-600"
+      headerIcon={<Zap className="w-4 h-4 text-cyan-100" />}
+      headerColor="bg-gradient-to-br from-cyan-500 to-cyan-700"
       showTargetHandle={true}
       showSourceHandle={true}
     >

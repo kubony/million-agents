@@ -1,38 +1,51 @@
 @import "tailwindcss";
 
-/* Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Google Fonts - Distinctive choices */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* Custom theme configuration */
+/* ============================================
+   NEON DARK THEME - Cyberpunk Node Editor
+   ============================================ */
+
 @theme {
-  --color-canvas: #0d0d0d;
-  --color-surface: #1a1a1a;
-  --color-surface-hover: #262626;
-  --color-border: #333333;
-  --color-accent: #8b5cf6;
-  --color-accent-hover: #7c3aed;
+  /* Core dark palette */
+  --color-canvas: #080810;
+  --color-surface: #0c0c18;
+  --color-surface-hover: #12122a;
+  --color-border: #1e1e3f;
+  --color-accent: #00d4ff;
+  --color-accent-hover: #00a8cc;
 
-  /* Node colors - 다크 테마 통일 */
-  --color-node-bg: #1f2937;           /* 모든 노드 배경 통일 (gray-800) */
-  --color-node-border: #374151;       /* 기본 테두리 (gray-700) */
+  /* Neon accent colors */
+  --color-neon-cyan: #00d4ff;
+  --color-neon-purple: #a855f7;
+  --color-neon-pink: #f472b6;
+  --color-neon-green: #22d3ee;
+  --color-neon-orange: #fb923c;
 
-  /* 헤더 컬러 (memorialbanana 스타일) */
-  --color-node-input-header: #f59e0b;      /* amber-500 */
-  --color-node-generate-header: #4f46e5;   /* indigo-600 */
-  --color-node-skill-header: #06b6d4;      /* cyan-500 */
-  --color-node-mcp-header: #ec4899;        /* pink-500 */
-  --color-node-output-header: #10b981;     /* emerald-500 */
+  /* Node header gradients */
+  --color-node-input-header: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  --color-node-skill-header: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  --color-node-output-header: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --color-node-mcp-header: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  --color-node-subagent-header: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
 }
 
-/* Base styles */
 :root {
-  --canvas-bg: #0d0d0d;
-  --surface: #1a1a1a;
-  --surface-hover: #262626;
-  --border: #333333;
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --canvas-bg: #080810;
+  --surface: #0c0c18;
+  --surface-elevated: #101024;
+  --surface-hover: #16163a;
+  --border: #1e1e3f;
+  --border-glow: #2d2d5a;
+  --text-primary: #f0f0f8;
+  --text-secondary: #9898b8;
+  --text-muted: #5c5c7a;
+
+  /* Glow colors */
+  --glow-cyan: rgba(0, 212, 255, 0.5);
+  --glow-purple: rgba(168, 85, 247, 0.5);
+  --glow-pink: rgba(244, 114, 182, 0.5);
 }
 
 * {
@@ -41,10 +54,12 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Outfit', system-ui, sans-serif;
   background-color: var(--canvas-bg);
   color: var(--text-primary);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -52,7 +67,10 @@ body {
   height: 100vh;
 }
 
-/* React Flow custom styles */
+/* ============================================
+   CANVAS & REACT FLOW
+   ============================================ */
+
 .react-flow {
   background-color: var(--canvas-bg) !important;
 }
@@ -61,7 +79,12 @@ body {
   background-color: var(--canvas-bg) !important;
 }
 
-/* 노드 래퍼 배경 투명 처리 - 흰색 박스 제거 */
+/* Grid pattern overlay */
+.react-flow__background pattern line {
+  stroke: #1a1a3a !important;
+}
+
+/* Node wrapper - transparent */
 .react-flow__node {
   background: transparent !important;
 }
@@ -75,17 +98,21 @@ body {
   padding: 0 !important;
 }
 
+/* Minimap */
 .react-flow__minimap {
   background-color: var(--surface) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 8px;
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
 }
 
+/* Controls */
 .react-flow__controls {
   background-color: var(--surface) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  backdrop-filter: blur(12px);
 }
 
 .react-flow__controls-button {
@@ -94,109 +121,151 @@ body {
   border-bottom: 1px solid var(--border) !important;
   color: var(--text-secondary) !important;
   fill: var(--text-secondary) !important;
+  transition: all 0.2s ease;
 }
 
 .react-flow__controls-button:hover {
   background-color: var(--surface-hover) !important;
+  color: var(--text-primary) !important;
 }
 
 .react-flow__controls-button:last-child {
   border-bottom: none !important;
 }
 
-/* Custom edge styles */
+/* ============================================
+   EDGE STYLES - Glowing connections
+   ============================================ */
+
 .react-flow__edge-path {
-  stroke: #4b5563 !important;
+  stroke: #3d3d6b !important;
   stroke-width: 2 !important;
-  stroke-dasharray: 5 5;
-  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+  stroke-dasharray: 6 4;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #6b7280 !important;
+  stroke: #00d4ff !important;
   stroke-width: 3 !important;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #8b5cf6 !important;
+  stroke: #00d4ff !important;
   stroke-width: 3 !important;
-  filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.5));
+  filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.8));
 }
 
 .react-flow__edge.animated .react-flow__edge-path {
-  animation: dashdraw 0.5s linear infinite;
+  animation: edge-flow 1s linear infinite;
 }
 
-/* 연결 중 드래그 라인 */
+/* Connection line while dragging */
 .react-flow__connection-path {
-  stroke: #8b5cf6 !important;
-  stroke-width: 2 !important;
-  stroke-dasharray: 5 5;
-  animation: dashdraw 0.3s linear infinite;
-  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.6));
+  stroke: #00d4ff !important;
+  stroke-width: 3 !important;
+  stroke-dasharray: 8 4;
+  animation: edge-flow 0.5s linear infinite;
+  filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.8));
 }
 
-@keyframes dashdraw {
-  from {
-    stroke-dashoffset: 10;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+@keyframes edge-flow {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
 }
 
-/* Node base styles - memorialbanana 스타일 */
+/* ============================================
+   NODE STYLES - Glassmorphism Dark
+   ============================================ */
+
 .workflow-node {
-  background-color: #1f2937;
-  border-radius: 12px;
-  border: 2px solid #374151;
+  background: linear-gradient(
+    145deg,
+    rgba(16, 16, 36, 0.95) 0%,
+    rgba(12, 12, 24, 0.98) 100%
+  );
+  border-radius: 16px;
+  border: 1px solid rgba(60, 60, 120, 0.4);
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.5),
-    0 4px 6px -2px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
-  min-width: 220px;
-  max-width: 280px;
-  overflow: hidden;
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 4px 24px -4px rgba(0, 0, 0, 0.5),
+    0 8px 32px -8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 240px;
+  max-width: 300px;
+  overflow: visible;
 }
 
 .workflow-node:hover {
+  border-color: rgba(0, 212, 255, 0.3);
   box-shadow:
-    0 20px 40px -8px rgba(0, 0, 0, 0.6),
-    0 8px 16px -4px rgba(0, 0, 0, 0.4);
+    0 0 0 1px rgba(0, 212, 255, 0.1),
+    0 8px 32px -4px rgba(0, 0, 0, 0.6),
+    0 0 40px -8px rgba(0, 212, 255, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transform: translateY(-2px);
-  border-color: #4b5563;
 }
 
 .workflow-node.selected {
-  ring: 2px;
-  ring-offset: 2px;
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow:
+    0 0 0 2px rgba(0, 212, 255, 0.3),
+    0 0 30px -4px rgba(0, 212, 255, 0.4),
+    0 8px 32px -4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* 노드 헤더 공통 스타일 */
+/* Node header */
 .workflow-node .node-header {
-  padding: 10px 14px;
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
+  padding: 12px 16px;
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 노드 컨텐츠 영역 */
+/* Header glow effect */
+.workflow-node .node-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: inherit;
+  filter: blur(20px);
+  opacity: 0.5;
+  z-index: -1;
+}
+
+/* Node content */
 .workflow-node .node-content {
-  padding: 12px 14px;
-  border-top: 1px solid #374151;
+  padding: 14px 16px;
+  background: rgba(8, 8, 16, 0.6);
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
 }
 
-/* Handle styles - 더 큰 연결 포인트 */
+/* ============================================
+   HANDLE STYLES - Neon glow points
+   ============================================ */
+
 .react-flow__handle {
-  width: 20px;
-  height: 20px;
-  border: 3px solid white;
-  background-color: #6b7280;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  width: 14px;
+  height: 14px;
+  border: 2px solid #00d4ff;
+  background: #0c0c18;
+  border-radius: 50%;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 0 8px rgba(0, 212, 255, 0.4),
+    inset 0 0 4px rgba(0, 212, 255, 0.2);
   cursor: crosshair;
 }
 
-/* 핸들 주변에 보이지 않는 히트 영역 추가 */
+/* Larger hit area */
 .react-flow__handle::before {
   content: '';
   position: absolute;
@@ -208,89 +277,79 @@ body {
 }
 
 .react-flow__handle:hover {
-  transform: scale(1.3);
-  background-color: #8b5cf6;
-  border-color: #c4b5fd;
+  transform: scale(1.4);
+  background: #00d4ff;
+  border-color: #67e8f9;
   box-shadow:
-    0 0 16px 6px rgba(139, 92, 246, 0.6),
-    0 0 28px 10px rgba(139, 92, 246, 0.3);
+    0 0 20px rgba(0, 212, 255, 0.8),
+    0 0 40px rgba(0, 212, 255, 0.4),
+    inset 0 0 8px rgba(255, 255, 255, 0.3);
 }
 
 .react-flow__handle-left {
-  left: -10px;
+  left: -7px;
 }
 
 .react-flow__handle-right {
-  right: -10px;
+  right: -7px;
 }
 
-/* 연결 시작 핸들 - 보라색 펄스 */
+/* Connecting from - pulse effect */
 .react-flow__handle.connectingfrom {
-  background-color: #8b5cf6;
-  border-color: #c4b5fd;
+  background: #00d4ff;
+  border-color: #67e8f9;
   transform: scale(1.5);
   box-shadow:
-    0 0 16px 6px rgba(139, 92, 246, 0.7),
-    0 0 32px 12px rgba(139, 92, 246, 0.3);
-  animation: handle-pulse 0.8s ease-in-out infinite;
+    0 0 24px rgba(0, 212, 255, 0.9),
+    0 0 48px rgba(0, 212, 255, 0.5);
+  animation: handle-pulse-cyan 0.8s ease-in-out infinite;
 }
 
-/* 연결 중 - 유효한 타겟 핸들 (자석 효과) */
+/* Connecting to - green glow */
 .react-flow__handle.connectingto,
 .react-flow__handle-left.connecting,
 .react-flow__handle-right.connecting {
-  background-color: #22c55e;
-  border-color: #86efac;
+  background: #22d3ee;
+  border-color: #a5f3fc;
   transform: scale(1.6);
   box-shadow:
-    0 0 16px 6px rgba(34, 197, 94, 0.7),
-    0 0 32px 12px rgba(34, 197, 94, 0.4);
+    0 0 24px rgba(34, 211, 238, 0.9),
+    0 0 48px rgba(34, 211, 238, 0.5);
   animation: handle-magnet 0.5s ease-in-out infinite;
 }
 
-/* 연결 유효성 시각화 */
+/* Valid connection */
 .react-flow__handle.valid {
-  background-color: #22c55e;
-  border-color: #86efac;
+  background: #10b981;
+  border-color: #6ee7b7;
   transform: scale(1.6);
   box-shadow:
-    0 0 20px 8px rgba(34, 197, 94, 0.8),
-    0 0 40px 16px rgba(34, 197, 94, 0.4);
+    0 0 28px rgba(16, 185, 129, 0.9),
+    0 0 56px rgba(16, 185, 129, 0.5);
 }
 
-/* 자석 효과 애니메이션 */
+@keyframes handle-pulse-cyan {
+  0%, 100% {
+    box-shadow:
+      0 0 24px rgba(0, 212, 255, 0.9),
+      0 0 48px rgba(0, 212, 255, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(0, 212, 255, 0.6),
+      0 0 64px rgba(0, 212, 255, 0.3);
+  }
+}
+
 @keyframes handle-magnet {
-  0%, 100% {
-    transform: scale(1.6);
-  }
-  50% {
-    transform: scale(1.8);
-  }
+  0%, 100% { transform: scale(1.6); }
+  50% { transform: scale(1.8); }
 }
 
-/* 핸들 펄스 애니메이션 */
-@keyframes handle-pulse {
-  0%, 100% {
-    box-shadow: 0 0 12px 4px rgba(139, 92, 246, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 20px 8px rgba(139, 92, 246, 0.3);
-  }
-}
+/* ============================================
+   SCROLLBAR
+   ============================================ */
 
-/* 핸들 글로우 애니메이션 (연결 대상) */
-@keyframes handle-glow {
-  0%, 100% {
-    box-shadow: 0 0 12px 4px rgba(34, 197, 94, 0.5);
-    transform: scale(1.25);
-  }
-  50% {
-    box-shadow: 0 0 20px 8px rgba(34, 197, 94, 0.7);
-    transform: scale(1.35);
-  }
-}
-
-/* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -298,24 +357,29 @@ body {
 
 ::-webkit-scrollbar-track {
   background: var(--surface);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #444444;
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3d3d6b 0%, #2d2d5a 100%);
+  border-radius: 4px;
+  border: 1px solid var(--border);
 }
 
-/* Animation utilities */
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4d4d7b 0%, #3d3d6b 100%);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
 @keyframes pulse-border {
   0%, 100% {
-    border-color: currentColor;
+    border-color: rgba(0, 212, 255, 0.6);
   }
   50% {
-    border-color: transparent;
+    border-color: rgba(0, 212, 255, 0.2);
   }
 }
 
@@ -323,26 +387,45 @@ body {
   animation: pulse-border 2s ease-in-out infinite;
 }
 
-/* Markdown content */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    filter: blur(20px);
+  }
+  50% {
+    opacity: 0.4;
+    filter: blur(30px);
+  }
+}
+
+/* ============================================
+   MARKDOWN CONTENT
+   ============================================ */
+
 .markdown-content {
-  color: #e5e7eb;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
 }
 
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3 {
-  color: #ffffff;
+  color: #f0f0f8;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
+  font-weight: 600;
 }
 
 .markdown-content p {
   margin-bottom: 1em;
+  color: var(--text-secondary);
+  line-height: 1.7;
 }
 
 .markdown-content pre {
-  background-color: var(--surface);
-  border-radius: 8px;
+  background: linear-gradient(145deg, #0c0c18 0%, #080810 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   padding: 1rem;
   overflow-x: auto;
 }
@@ -350,10 +433,73 @@ body {
 .markdown-content code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.875rem;
+  color: #00d4ff;
 }
 
 .markdown-content ul,
 .markdown-content ol {
   padding-left: 1.5em;
   margin-bottom: 1em;
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.glass-panel {
+  background: linear-gradient(
+    145deg,
+    rgba(16, 16, 36, 0.9) 0%,
+    rgba(12, 12, 24, 0.95) 100%
+  );
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(60, 60, 120, 0.3);
+  border-radius: 16px;
+}
+
+.neon-text-cyan {
+  color: #00d4ff;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+.neon-text-purple {
+  color: #a855f7;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+.neon-text-pink {
+  color: #f472b6;
+  text-shadow: 0 0 10px rgba(244, 114, 182, 0.5);
+}
+
+/* Input fields */
+input, textarea, select {
+  background: rgba(8, 8, 16, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  transition: all 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+}
+
+/* Buttons */
+button {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
 }

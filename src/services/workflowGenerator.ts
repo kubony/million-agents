@@ -561,7 +561,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         source: sourceId,
         target: targetId,
         animated: true,
-      };
+      } as WorkflowEdge;
     })
     .filter((edge): edge is WorkflowEdge => edge !== null);
 

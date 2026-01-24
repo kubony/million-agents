@@ -12,15 +12,15 @@ function getOutputIcon(type: OutputType) {
   switch (type) {
     case 'markdown':
     case 'document':
-      return <FileText className="w-4 h-4 text-emerald-200" />;
+      return <FileText className="w-4 h-4 text-emerald-100" />;
     case 'image':
-      return <Image className="w-4 h-4 text-emerald-200" />;
+      return <Image className="w-4 h-4 text-emerald-100" />;
     case 'webpage':
-      return <Globe className="w-4 h-4 text-emerald-200" />;
+      return <Globe className="w-4 h-4 text-emerald-100" />;
     case 'link':
-      return <Link2 className="w-4 h-4 text-emerald-200" />;
+      return <Link2 className="w-4 h-4 text-emerald-100" />;
     default:
-      return <BarChart3 className="w-4 h-4 text-emerald-200" />;
+      return <BarChart3 className="w-4 h-4 text-emerald-100" />;
   }
 }
 
@@ -30,7 +30,7 @@ function OutputNode({ data, selected }: OutputNodeProps) {
       data={data}
       selected={selected}
       headerIcon={getOutputIcon(data.outputType)}
-      headerColor="bg-emerald-600"
+      headerColor="bg-gradient-to-br from-emerald-500 to-green-700"
       showTargetHandle={true}
       showSourceHandle={false}
     >

@@ -13,8 +13,8 @@ function McpNode({ data, selected }: McpNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Plug className="w-4 h-4 text-pink-200" />}
-      headerColor="bg-pink-600"
+      headerIcon={<Plug className="w-4 h-4 text-pink-100" />}
+      headerColor="bg-gradient-to-br from-pink-500 to-rose-700"
       showTargetHandle={true}
       showSourceHandle={true}
     >

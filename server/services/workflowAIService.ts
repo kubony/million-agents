@@ -1,4 +1,4 @@
-import { query, type Message } from '@anthropic-ai/claude-code';
+import Anthropic from '@anthropic-ai/sdk';
 
 // AI가 생성하는 워크플로우 결과 타입
 export interface AIWorkflowResult {
@@ -157,33 +157,33 @@ ${AVAILABLE_TOOLS.join(', ')}
 `;
 
 export class WorkflowAIService {
+  private client: Anthropic;
+
+  constructor() {
+    this.client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+
   async generate(prompt: string): Promise<AIWorkflowResult> {
     const userPrompt = `다음 워크플로우를 설계해주세요: "${prompt}"
 
-${SYSTEM_PROMPT}`;
+반드시 JSON만 반환하세요. 마크다운 코드블록 없이 순수 JSON만 응답하세요.`;
 
     let responseText = '';
 
-    // Claude Code SDK의 query 함수 사용 (사용자의 Claude 구독 활용)
-    const response = await query({
-      prompt: userPrompt,
-      options: {
-        maxTurns: 1,
-        allowedTools: [], // 도구 없이 텍스트 응답만
-      },
+    // Anthropic SDK 사용
+    const response = await this.client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userPrompt }],
     });
 
     // 응답에서 텍스트 추출
-    for await (const message of response) {
-      if (message.type === 'assistant' && message.message) {
-        const content = message.message.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text') {
-              responseText += block.text;
-            }
-          }
-        }
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        responseText += block.text;
       }
     }
 

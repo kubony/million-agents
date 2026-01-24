@@ -40,6 +40,7 @@ export interface SkillNodeData extends BaseNodeData {
   skillId?: string;
   skillCategory?: string;
   mdContent?: string;
+  skillContent?: string; // AI가 생성한 커스텀 스킬 SKILL.md 내용
   usedInputs?: string[];
 }
 

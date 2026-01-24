@@ -13,8 +13,8 @@ function InputNode({ data, selected }: InputNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<MessageSquare className="w-4 h-4 text-amber-200" />}
-      headerColor="bg-amber-600"
+      headerIcon={<MessageSquare className="w-4 h-4 text-amber-100" />}
+      headerColor="bg-gradient-to-br from-amber-500 to-orange-600"
       showTargetHandle={false}
       showSourceHandle={true}
     >

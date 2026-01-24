@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Download, FileText, Eye, Play, MessageSquare, Upload } from 'lucide-react';
+import {
+  Download,
+  FileText,
+  Eye,
+  Play,
+  MessageSquare,
+  Upload,
+  Image,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useWorkflowStore, selectSelectedNode } from '../../stores/workflowStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
@@ -8,10 +18,10 @@ import remarkGfm from 'remark-gfm';
 import type { InputNodeData } from '../../types/nodes';
 
 export default function PreviewPanel() {
-  const { isRunning, results } = useExecutionStore();
+  const { isRunning, results, workflowResults, logs } = useExecutionStore();
   const { nodes, selectedNodeId, updateNode } = useWorkflowStore();
   const selectedNode = useWorkflowStore(selectSelectedNode);
-  const { execute } = useWorkflowExecution();
+  const { execute, generatedFiles, downloadFile, downloadAllFiles } = useWorkflowExecution();
 
   // Local state for input value during editing
   const [inputValue, setInputValue] = useState('');
@@ -85,13 +95,28 @@ export default function PreviewPanel() {
         </div>
       )}
 
+      {/* Run Button - Always visible */}
+      <div className="p-4 border-b border-border">
+        <button
+          onClick={handleTestRun}
+          disabled={isRunning || nodes.length === 0}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+        >
+          <Play className="w-4 h-4" />
+          {isRunning ? 'Running...' : 'Run Workflow'}
+        </button>
+        {nodes.length === 0 && (
+          <p className="text-xs text-gray-500 text-center mt-2">노드를 추가해주세요</p>
+        )}
+      </div>
+
       {/* Result Display */}
       <div className="flex-1 overflow-y-auto p-4">
-        {/* Input Node Form */}
-        {isInputNodeSelected && inputNodeData ? (
-          <div className="space-y-4">
+        {/* Input Node Form - show when input node is selected */}
+        {isInputNodeSelected && inputNodeData && (
+          <div className="space-y-4 mb-4 p-4 bg-surface rounded-lg border border-border">
             {/* Input Header */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-amber-500" />
               <h4 className="text-md font-medium text-white">{inputNodeData.label}</h4>
             </div>
@@ -149,16 +174,114 @@ export default function PreviewPanel() {
                 </select>
               </div>
             )}
+          </div>
+        )}
 
-            {/* Test Run Button */}
-            <button
-              onClick={handleTestRun}
-              disabled={isRunning}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              {isRunning ? 'Running...' : 'Test Workflow'}
-            </button>
+        {/* Generated Files - Download Section */}
+        {generatedFiles.length > 0 && (
+          <div className="mb-4 p-4 bg-green-900/20 border border-green-700 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-green-300">생성된 파일</h4>
+              <button
+                onClick={downloadAllFiles}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                전체 다운로드
+              </button>
+            </div>
+            <div className="space-y-2">
+              {generatedFiles.map((file, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2 bg-surface rounded"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm text-white">{file.name}</span>
+                  </div>
+                  <button
+                    onClick={() => downloadFile(file.name, file.content)}
+                    className="p-1 hover:bg-surface-hover rounded transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Workflow Results Display */}
+        {workflowResults.length > 0 ? (
+          <div className="space-y-4">
+            {/* Results by Node */}
+            {workflowResults.map((result) => (
+              <div
+                key={result.nodeId}
+                className={`p-4 rounded-lg border ${
+                  result.success
+                    ? 'bg-surface border-border'
+                    : 'bg-red-900/20 border-red-700'
+                }`}
+              >
+                {/* Node Header */}
+                <div className="flex items-center gap-2 mb-3">
+                  {result.success ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                  <h5 className="text-sm font-medium text-white">{result.label}</h5>
+                </div>
+
+                {/* Error Message */}
+                {result.error && (
+                  <p className="text-sm text-red-400 mb-3">{result.error}</p>
+                )}
+
+                {/* Generated Files */}
+                {result.files && result.files.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    <p className="text-xs text-gray-400">생성된 파일:</p>
+                    {result.files.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 p-2 bg-surface-hover rounded"
+                      >
+                        {file.type === 'image' ? (
+                          <Image className="w-4 h-4 text-purple-400" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-blue-400" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{file.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{file.path}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Result Text (collapsible) */}
+                {result.result && (
+                  <details className="group" open>
+                    <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">
+                      결과 보기
+                    </summary>
+                    <div className="mt-2 p-2 bg-black/30 rounded max-h-64 overflow-y-auto">
+                      <div className="markdown-content text-sm">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {result.result.length > 2000
+                            ? result.result.substring(0, 2000) + '...'
+                            : result.result}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  </details>
+                )}
+              </div>
+            ))}
           </div>
         ) : lastResult ? (
           <div className="markdown-content">
@@ -166,24 +289,45 @@ export default function PreviewPanel() {
               {typeof lastResult === 'string' ? lastResult : JSON.stringify(lastResult, null, 2)}
             </ReactMarkdown>
           </div>
+        ) : logs.length > 0 ? (
+          // Show logs when running
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-white mb-3">실행 로그</h4>
+            {logs.slice(-20).map((log) => (
+              <div key={log.id} className="flex items-start gap-2 text-xs">
+                <span className="text-gray-500 shrink-0">
+                  {new Date(log.timestamp).toLocaleTimeString('ko-KR')}
+                </span>
+                <span className={
+                  log.level === 'error' ? 'text-red-400' :
+                  log.level === 'warning' ? 'text-yellow-400' :
+                  log.level === 'success' ? 'text-green-400' :
+                  'text-gray-300'
+                }>
+                  {log.message}
+                </span>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <FileText className="w-12 h-12 mb-4 opacity-50" />
             <p className="text-sm">Run the workflow to see results</p>
+            <p className="text-xs mt-2">노드를 연결하고 Run Workflow 버튼을 클릭하세요</p>
           </div>
         )}
       </div>
 
       {/* Download Actions */}
-      {lastResult && (
+      {(lastResult || generatedFiles.length > 0) && (
         <div className="flex items-center gap-2 p-4 border-t border-border">
-          <button className="flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-lg text-sm hover:bg-border transition-colors">
+          <button
+            onClick={downloadAllFiles}
+            disabled={generatedFiles.length === 0}
+            className="flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-lg text-sm hover:bg-border transition-colors disabled:opacity-50"
+          >
             <Download className="w-4 h-4" />
             Download .md
-          </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-lg text-sm hover:bg-border transition-colors">
-            <FileText className="w-4 h-4" />
-            Export .docx
           </button>
         </div>
       )}

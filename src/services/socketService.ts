@@ -27,12 +27,28 @@ export interface WorkflowExecutionRequest {
   inputs?: Record<string, string>;
 }
 
+// Workflow result types
+export interface WorkflowResult {
+  nodeId: string;
+  label: string;
+  success: boolean;
+  result?: string;
+  files?: Array<{ path: string; type: string; name: string }>;
+  error?: string;
+}
+
+export interface WorkflowCompletedData {
+  workflowId: string;
+  results?: WorkflowResult[];
+  outputDir?: string;
+}
+
 // Event handlers type
 export interface SocketEventHandlers {
   onNodeUpdate?: (event: NodeUpdateEvent) => void;
   onConsoleLog?: (event: ConsoleLogEvent) => void;
   onWorkflowStarted?: (data: { workflowId: string }) => void;
-  onWorkflowCompleted?: (data: { workflowId: string }) => void;
+  onWorkflowCompleted?: (data: WorkflowCompletedData) => void;
   onWorkflowError?: (data: { workflowId: string; error: string }) => void;
   onWorkflowCancelled?: () => void;
 }
@@ -72,7 +88,7 @@ class SocketService {
       this.handlers.onWorkflowStarted?.(data);
     });
 
-    this.socket.on('workflow:completed', (data: { workflowId: string }) => {
+    this.socket.on('workflow:completed', (data: WorkflowCompletedData) => {
       this.handlers.onWorkflowCompleted?.(data);
     });
 

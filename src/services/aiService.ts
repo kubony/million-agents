@@ -83,19 +83,27 @@ export async function generateWorkflow(prompt: string): Promise<WorkflowGenerati
 
   // Parse JSON response
   try {
-    const result = JSON.parse(textContent.text) as WorkflowGenerationResult;
+    const parsed = JSON.parse(textContent.text) as {
+      nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
+      edges: Edge[];
+      description: string;
+    };
 
-    // Add required fields to nodes
-    result.nodes = result.nodes.map((node) => ({
+    // Add required fields to nodes and cast properly
+    const nodes = parsed.nodes.map((node) => ({
       ...node,
       data: {
         ...node.data,
         status: 'idle' as const,
         usedInputs: [],
       },
-    }));
+    })) as unknown as WorkflowNode[];
 
-    return result;
+    return {
+      nodes,
+      edges: parsed.edges,
+      description: parsed.description,
+    };
   } catch {
     throw new Error('Failed to parse workflow response from Claude');
   }

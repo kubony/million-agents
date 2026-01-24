@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import type { LogEntry, LogLevel } from '../types/workflow';
+import type { WorkflowResult } from '../services/socketService';
 
 interface ExecutionState {
   // Execution state
@@ -12,6 +13,10 @@ interface ExecutionState {
   startTime: number | null;
   endTime: number | null;
 
+  // Workflow results
+  workflowResults: WorkflowResult[];
+  outputDir: string | null;
+
   // Logs
   logs: LogEntry[];
 
@@ -21,6 +26,7 @@ interface ExecutionState {
   setCurrentNode: (nodeId: string | null) => void;
   markNodeCompleted: (nodeId: string, result?: any) => void;
   markNodeFailed: (nodeId: string, error?: string) => void;
+  setWorkflowResults: (results: WorkflowResult[], outputDir?: string) => void;
   resetExecution: () => void;
 
   // Log actions
@@ -37,6 +43,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   results: new Map(),
   startTime: null,
   endTime: null,
+  workflowResults: [],
+  outputDir: null,
   logs: [],
 
   // Execution actions
@@ -49,6 +57,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       results: new Map(),
       startTime: Date.now(),
       endTime: null,
+      workflowResults: [],
+      outputDir: null,
     });
     get().addLog('info', 'Workflow execution started');
   },
@@ -91,6 +101,23 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     get().addLog('error', error || 'Node failed', nodeId);
   },
 
+  setWorkflowResults: (results, outputDir) => {
+    set({
+      workflowResults: results,
+      outputDir: outputDir || null,
+    });
+    // 각 노드 결과를 results Map에도 저장
+    results.forEach((r) => {
+      if (r.result) {
+        set((state) => {
+          const newResults = new Map(state.results);
+          newResults.set(r.nodeId, r.result);
+          return { results: newResults };
+        });
+      }
+    });
+  },
+
   resetExecution: () => {
     set({
       isRunning: false,
@@ -100,6 +127,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       results: new Map(),
       startTime: null,
       endTime: null,
+      workflowResults: [],
+      outputDir: null,
     });
   },
 

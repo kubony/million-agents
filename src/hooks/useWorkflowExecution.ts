@@ -1,10 +1,11 @@
-import { useEffect, useCallback } from 'react';
-import { socketService, type NodeUpdateEvent, type ConsoleLogEvent } from '../services/socketService';
+import { useCallback, useState } from 'react';
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useExecutionStore } from '../stores/executionStore';
+import { executeWorkflow } from '../services/localExecutor';
+import type { WorkflowResult } from '../services/socketService';
 
 export function useWorkflowExecution() {
-  const { nodes, edges, workflowId, workflowName, updateNodeStatus } = useWorkflowStore();
+  const { nodes, edges, workflowName, updateNodeStatus } = useWorkflowStore();
   const {
     isRunning,
     startExecution,
@@ -12,146 +13,120 @@ export function useWorkflowExecution() {
     setCurrentNode,
     markNodeCompleted,
     markNodeFailed,
+    setWorkflowResults,
     addLog,
+    clearLogs,
   } = useExecutionStore();
 
-  // Connect to socket on mount
-  useEffect(() => {
-    const handlers = {
-      onNodeUpdate: (event: NodeUpdateEvent) => {
-        updateNodeStatus(event.nodeId, event.status, event.progress);
+  const [generatedFiles, setGeneratedFiles] = useState<Array<{ name: string; content: string }>>([]);
 
-        if (event.status === 'running') {
-          setCurrentNode(event.nodeId);
-        } else if (event.status === 'completed') {
-          markNodeCompleted(event.nodeId, event.result);
-        } else if (event.status === 'error') {
-          markNodeFailed(event.nodeId, event.error);
-        }
-      },
-
-      onConsoleLog: (event: ConsoleLogEvent) => {
-        const levelMap: Record<string, 'info' | 'warning' | 'error' | 'debug' | 'success'> = {
-          info: 'info',
-          warn: 'warning',
-          error: 'error',
-          debug: 'debug',
-        };
-        addLog(levelMap[event.type] || 'info', event.message, event.nodeId);
-      },
-
-      onWorkflowStarted: () => {
-        startExecution();
-      },
-
-      onWorkflowCompleted: () => {
-        stopExecution();
-        addLog('success', 'Workflow completed successfully');
-      },
-
-      onWorkflowError: (data: { workflowId: string; error: string }) => {
-        stopExecution();
-        addLog('error', `Workflow failed: ${data.error}`);
-      },
-
-      onWorkflowCancelled: () => {
-        stopExecution();
-        addLog('warning', 'Workflow execution cancelled');
-      },
-    };
-
-    socketService.connect(handlers);
-
-    return () => {
-      socketService.disconnect();
-    };
-  }, [
-    updateNodeStatus,
-    setCurrentNode,
-    markNodeCompleted,
-    markNodeFailed,
-    startExecution,
-    stopExecution,
-    addLog,
-  ]);
-
-  // Execute workflow
-  const execute = useCallback(() => {
+  // Execute workflow locally (no server needed)
+  const execute = useCallback(async () => {
     if (nodes.length === 0) {
       addLog('warning', 'No nodes to execute');
       return;
     }
 
-    // Sort nodes by execution order (topological sort based on edges)
-    const sortedNodes = topologicalSort(nodes, edges);
+    // Clear previous logs and start
+    clearLogs();
+    startExecution();
+    setGeneratedFiles([]);
 
-    socketService.executeWorkflow({
-      workflowId,
-      workflowName,
-      nodes: sortedNodes,
-      edges,
+    addLog('info', `워크플로우 "${workflowName}" 실행 시작...`);
+
+    try {
+      const results = await executeWorkflow(nodes, edges, {
+        onNodeStart: (nodeId) => {
+          updateNodeStatus(nodeId, 'running', 0);
+          setCurrentNode(nodeId);
+        },
+        onNodeProgress: (nodeId, progress) => {
+          updateNodeStatus(nodeId, 'running', progress);
+        },
+        onNodeComplete: (nodeId, result) => {
+          updateNodeStatus(nodeId, 'completed', 100);
+          markNodeCompleted(nodeId, result);
+        },
+        onNodeError: (nodeId, error) => {
+          updateNodeStatus(nodeId, 'error', 0);
+          markNodeFailed(nodeId, error);
+        },
+        onLog: (level, message, nodeId) => {
+          addLog(level, message, nodeId);
+        },
+      });
+
+      // Collect results for display
+      const workflowResults: WorkflowResult[] = [];
+      const files: Array<{ name: string; content: string }> = [];
+
+      for (const [nodeId, result] of results) {
+        const node = nodes.find((n) => n.id === nodeId);
+        const resultText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+
+        workflowResults.push({
+          nodeId,
+          label: node?.data.label || nodeId,
+          success: true,
+          result: resultText,
+        });
+
+        // Generate downloadable file for output nodes
+        if (node?.type === 'output') {
+          const fileName = `${workflowName.replace(/\s+/g, '_')}_${node.data.label.replace(/\s+/g, '_')}.md`;
+          files.push({
+            name: fileName,
+            content: resultText,
+          });
+        }
+      }
+
+      setGeneratedFiles(files);
+      setWorkflowResults(workflowResults);
+      stopExecution();
+      addLog('success', '워크플로우 실행 완료!');
+
+      // Auto-download files
+      if (files.length > 0) {
+        addLog('info', `${files.length}개 파일 생성됨`);
+        files.forEach((file) => {
+          addLog('info', `  - ${file.name}`);
+        });
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      stopExecution();
+      addLog('error', `실행 오류: ${errorMessage}`);
+    }
+  }, [nodes, edges, workflowName, addLog, clearLogs, startExecution, stopExecution, updateNodeStatus, setCurrentNode, markNodeCompleted, markNodeFailed, setWorkflowResults]);
+
+  // Download a file
+  const downloadFile = useCallback((fileName: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addLog('info', `파일 다운로드: ${fileName}`);
+  }, [addLog]);
+
+  // Download all generated files
+  const downloadAllFiles = useCallback(() => {
+    generatedFiles.forEach((file) => {
+      downloadFile(file.name, file.content);
     });
-  }, [nodes, edges, workflowId, workflowName, addLog]);
-
-  // Cancel execution
-  const cancel = useCallback(() => {
-    socketService.cancelExecution();
-  }, []);
+  }, [generatedFiles, downloadFile]);
 
   return {
     isRunning,
     execute,
-    cancel,
-    isConnected: socketService.isConnected(),
+    generatedFiles,
+    downloadFile,
+    downloadAllFiles,
   };
-}
-
-// Helper function for topological sort
-function topologicalSort<T extends { id: string }>(
-  nodes: T[],
-  edges: Array<{ source: string; target: string }>
-): T[] {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const inDegree = new Map<string, number>();
-  const adjList = new Map<string, string[]>();
-
-  // Initialize
-  nodes.forEach((node) => {
-    inDegree.set(node.id, 0);
-    adjList.set(node.id, []);
-  });
-
-  // Build graph
-  edges.forEach((edge) => {
-    adjList.get(edge.source)?.push(edge.target);
-    inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
-  });
-
-  // Find nodes with no incoming edges
-  const queue: string[] = [];
-  inDegree.forEach((degree, nodeId) => {
-    if (degree === 0) {
-      queue.push(nodeId);
-    }
-  });
-
-  // Process queue
-  const result: T[] = [];
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    const node = nodeMap.get(nodeId);
-    if (node) {
-      result.push(node);
-    }
-
-    adjList.get(nodeId)?.forEach((neighborId) => {
-      const newDegree = (inDegree.get(neighborId) || 0) - 1;
-      inDegree.set(neighborId, newDegree);
-      if (newDegree === 0) {
-        queue.push(neighborId);
-      }
-    });
-  }
-
-  return result;
 }

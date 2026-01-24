@@ -3,9 +3,11 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { join } from 'path';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
+import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
@@ -80,12 +82,98 @@ app.post('/api/generate/workflow', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Execute workflow - Opens Terminal with claude -c command
+  // Execute workflow - Actually executes the workflow using Claude Code SDK
   socket.on('execute:workflow', async (data: WorkflowExecutionRequest) => {
-    console.log('Executing workflow in Terminal:', data.workflowId);
+    console.log('Executing workflow:', data.workflowId);
 
     try {
       // Emit start event
+      socket.emit('workflow:started', { workflowId: data.workflowId });
+
+      socket.emit('console:log', {
+        type: 'info',
+        message: `워크플로우 "${data.workflowName}" 실행 시작...`,
+        timestamp: new Date().toISOString(),
+      });
+
+      // 출력 디렉토리 설정
+      const outputDir = join(fileService.getProjectPath(), 'output', data.workflowId);
+
+      // 실제 워크플로우 실행
+      const results = await workflowExecutionService.execute(
+        {
+          workflowId: data.workflowId,
+          workflowName: data.workflowName,
+          nodes: data.nodes,
+          edges: data.edges,
+          inputs: data.inputs,
+          outputDir,
+        },
+        // Progress callback
+        (update: NodeExecutionUpdate) => {
+          socket.emit('node:update', update);
+        },
+        // Log callback
+        (type, message) => {
+          socket.emit('console:log', {
+            type,
+            message,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      );
+
+      // 결과 수집
+      const allResults: Array<{
+        nodeId: string;
+        label: string;
+        success: boolean;
+        result?: string;
+        files?: Array<{ path: string; type: string; name: string }>;
+        error?: string;
+      }> = [];
+
+      for (const [nodeId, result] of results) {
+        const node = data.nodes.find((n) => n.id === nodeId);
+        allResults.push({
+          nodeId,
+          label: node?.data.label || nodeId,
+          success: result.success,
+          result: result.result,
+          files: result.files,
+          error: result.error,
+        });
+      }
+
+      // 최종 결과 전송
+      socket.emit('workflow:completed', {
+        workflowId: data.workflowId,
+        results: allResults,
+        outputDir,
+      });
+
+      socket.emit('console:log', {
+        type: 'info',
+        message: `워크플로우 실행 완료! 결과가 ${outputDir}에 저장되었습니다.`,
+        timestamp: new Date().toISOString(),
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      socket.emit('console:log', {
+        type: 'error',
+        message: `실행 오류: ${errorMessage}`,
+        timestamp: new Date().toISOString(),
+      });
+      socket.emit('workflow:error', { workflowId: data.workflowId, error: errorMessage });
+    }
+  });
+
+  // Execute workflow in Terminal (alternative mode)
+  socket.on('execute:workflow:terminal', async (data: WorkflowExecutionRequest) => {
+    console.log('Executing workflow in Terminal:', data.workflowId);
+
+    try {
       socket.emit('workflow:started', { workflowId: data.workflowId });
 
       socket.emit('console:log', {
@@ -94,7 +182,6 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString(),
       });
 
-      // Execute in terminal
       const result = await executeInTerminal({
         workflowName: data.workflowName,
         nodes: data.nodes,
@@ -109,29 +196,8 @@ io.on('connection', (socket) => {
           message: result.message,
           timestamp: new Date().toISOString(),
         });
-
-        // Also send the command for reference
-        const command = getClaudeCommand({
-          workflowName: data.workflowName,
-          nodes: data.nodes,
-          edges: data.edges,
-          inputs: data.inputs,
-        });
-
-        socket.emit('console:log', {
-          type: 'debug',
-          message: `Command: ${command.substring(0, 200)}...`,
-          timestamp: new Date().toISOString(),
-        });
-
         socket.emit('workflow:completed', { workflowId: data.workflowId });
       } else {
-        socket.emit('console:log', {
-          type: 'error',
-          message: result.message,
-          timestamp: new Date().toISOString(),
-        });
-
         socket.emit('workflow:error', {
           workflowId: data.workflowId,
           error: result.message
@@ -139,11 +205,6 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      socket.emit('console:log', {
-        type: 'error',
-        message: `Error: ${errorMessage}`,
-        timestamp: new Date().toISOString(),
-      });
       socket.emit('workflow:error', { workflowId: data.workflowId, error: errorMessage });
     }
   });
