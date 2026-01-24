@@ -1,8 +1,25 @@
-import { ArrowLeft, Share2, Settings, Save } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Share2, Settings, Save, Download } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
+import SaveDialog from '../dialogs/SaveDialog';
+import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
-  const { workflowName, setWorkflowName, isDraft } = useWorkflowStore();
+  const { workflowName, setWorkflowName, isDraft, nodes, edges } = useWorkflowStore();
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
+
+  const handleExport = () => {
+    const config = generateClaudeConfig(workflowName, nodes, edges, 'local');
+    setExportConfig(config);
+    setIsSaveDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsSaveDialogOpen(false);
+    setExportConfig(null);
+  };
 
   return (
     <header className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border">
@@ -42,6 +59,14 @@ export default function Header() {
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500">Saved</span>
 
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          <span className="text-sm font-medium">Export</span>
+        </button>
+
         <button className="flex items-center gap-2 px-4 py-2 bg-surface-hover hover:bg-border rounded-lg transition-colors">
           <Share2 className="w-4 h-4" />
           <span className="text-sm font-medium">Share App</span>
@@ -55,6 +80,15 @@ export default function Header() {
           <Settings className="w-5 h-5 text-gray-400" />
         </button>
       </div>
+
+      {/* Save Dialog */}
+      {exportConfig && (
+        <SaveDialog
+          isOpen={isSaveDialogOpen}
+          onClose={handleCloseDialog}
+          config={exportConfig}
+        />
+      )}
     </header>
   );
 }

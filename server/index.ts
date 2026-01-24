@@ -3,7 +3,9 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { ClaudeService } from './services/claudeService';
+import { fileService } from './services/fileService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
+import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,6 +24,32 @@ const claudeService = new ClaudeService();
 // REST API endpoints
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Get project path
+app.get('/api/project-path', (req, res) => {
+  res.json({ path: fileService.getProjectPath() });
+});
+
+// Save workflow as Claude Code configuration
+app.post('/api/save/workflow', async (req, res) => {
+  try {
+    const { config, options } = req.body as {
+      config: ClaudeConfigExport;
+      options: SaveOptions;
+    };
+
+    if (!config || !options) {
+      return res.status(400).json({ message: 'Missing config or options' });
+    }
+
+    const result = await fileService.saveWorkflow(config, options);
+    res.json(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Save workflow error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
 });
 
 // Socket.io connection handling
