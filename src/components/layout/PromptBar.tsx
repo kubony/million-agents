@@ -1,35 +1,48 @@
 import { useState } from 'react';
 import { Sparkles, Send, Loader2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
-import { generateAndEnhanceWorkflow } from '../../services/workflowGenerator';
+import { generateWorkflowWithAI, generateAndEnhanceWorkflow } from '../../services/workflowGenerator';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const { loadWorkflow, workflowName } = useWorkflowStore();
+  const [error, setError] = useState<string | null>(null);
+  const { loadWorkflow } = useWorkflowStore();
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isGenerating) return;
 
     setIsGenerating(true);
+    setError(null);
 
     try {
-      // Simulate a brief delay for UX
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // AI 기반 워크플로우 생성 시도
+      const { workflow, workflowName } = await generateWorkflowWithAI(prompt);
 
-      // Generate workflow from prompt
-      const generatedWorkflow = generateAndEnhanceWorkflow(prompt);
-
-      // Load the generated workflow
+      // 생성된 워크플로우 로드
       loadWorkflow({
-        nodes: generatedWorkflow.nodes,
-        edges: generatedWorkflow.edges,
-        name: workflowName === 'Untitled Workflow' ? prompt.slice(0, 30) : workflowName,
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+        name: workflowName,
       });
 
       setPrompt('');
-    } catch (error) {
-      console.error('Failed to generate workflow:', error);
+    } catch (err) {
+      console.error('AI workflow generation failed, falling back to pattern matching:', err);
+
+      // 폴백: 기존 패턴 매칭 방식 사용
+      try {
+        const generatedWorkflow = generateAndEnhanceWorkflow(prompt);
+        loadWorkflow({
+          nodes: generatedWorkflow.nodes,
+          edges: generatedWorkflow.edges,
+          name: prompt.slice(0, 30),
+        });
+        setPrompt('');
+      } catch (fallbackErr) {
+        console.error('Fallback generation also failed:', fallbackErr);
+        setError('워크플로우 생성에 실패했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -73,9 +86,15 @@ export default function PromptBar() {
         )}
       </button>
 
-      {/* Disclaimer */}
-      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-gray-600">
-        AI will generate a workflow based on your description
+      {/* Disclaimer or Error */}
+      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs">
+        {error ? (
+          <span className="text-red-400">{error}</span>
+        ) : isGenerating ? (
+          <span className="text-accent">AI가 워크플로우를 생성하고 있습니다...</span>
+        ) : (
+          <span className="text-gray-600">AI가 워크플로우를 자동 생성합니다</span>
+        )}
       </div>
     </div>
   );

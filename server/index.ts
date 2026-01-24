@@ -1,9 +1,12 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
+import { workflowAIService } from './services/workflowAIService';
+import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
@@ -52,79 +55,95 @@ app.post('/api/save/workflow', async (req, res) => {
   }
 });
 
+// Generate workflow using AI
+app.post('/api/generate/workflow', async (req, res) => {
+  try {
+    const { prompt } = req.body as { prompt: string };
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ message: 'Prompt is required' });
+    }
+
+    console.log('Generating workflow for prompt:', prompt);
+    const result = await workflowAIService.generate(prompt);
+    console.log('Workflow generated:', result.workflowName);
+
+    res.json(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Generate workflow error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Execute workflow
+  // Execute workflow - Opens Terminal with claude -c command
   socket.on('execute:workflow', async (data: WorkflowExecutionRequest) => {
-    console.log('Executing workflow:', data.workflowId);
+    console.log('Executing workflow in Terminal:', data.workflowId);
 
     try {
       // Emit start event
       socket.emit('workflow:started', { workflowId: data.workflowId });
 
-      // Execute each node in order
-      for (const node of data.nodes) {
-        // Update node status to running
-        const runningUpdate: NodeExecutionUpdate = {
-          nodeId: node.id,
-          status: 'running',
-          progress: 0,
-        };
-        socket.emit('node:update', runningUpdate);
+      socket.emit('console:log', {
+        type: 'info',
+        message: 'Opening Terminal with Claude Code...',
+        timestamp: new Date().toISOString(),
+      });
 
-        try {
-          // Execute node based on type
-          const result = await claudeService.executeNode(node, (progress) => {
-            socket.emit('node:update', {
-              nodeId: node.id,
-              status: 'running',
-              progress,
-            });
-          });
+      // Execute in terminal
+      const result = await executeInTerminal({
+        workflowName: data.workflowName,
+        nodes: data.nodes,
+        edges: data.edges,
+        inputs: data.inputs,
+        workingDirectory: fileService.getProjectPath(),
+      });
 
-          // Update node status to completed
-          const completedUpdate: NodeExecutionUpdate = {
-            nodeId: node.id,
-            status: 'completed',
-            progress: 100,
-            result,
-          };
-          socket.emit('node:update', completedUpdate);
+      if (result.success) {
+        socket.emit('console:log', {
+          type: 'info',
+          message: result.message,
+          timestamp: new Date().toISOString(),
+        });
 
-          // Emit console log
-          socket.emit('console:log', {
-            type: 'info',
-            message: `Node ${node.data.label} completed`,
-            timestamp: new Date().toISOString(),
-            nodeId: node.id,
-          });
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        // Also send the command for reference
+        const command = getClaudeCommand({
+          workflowName: data.workflowName,
+          nodes: data.nodes,
+          edges: data.edges,
+          inputs: data.inputs,
+        });
 
-          const errorUpdate: NodeExecutionUpdate = {
-            nodeId: node.id,
-            status: 'error',
-            error: errorMessage,
-          };
-          socket.emit('node:update', errorUpdate);
+        socket.emit('console:log', {
+          type: 'debug',
+          message: `Command: ${command.substring(0, 200)}...`,
+          timestamp: new Date().toISOString(),
+        });
 
-          socket.emit('console:log', {
-            type: 'error',
-            message: `Error in node ${node.data.label}: ${errorMessage}`,
-            timestamp: new Date().toISOString(),
-            nodeId: node.id,
-          });
+        socket.emit('workflow:completed', { workflowId: data.workflowId });
+      } else {
+        socket.emit('console:log', {
+          type: 'error',
+          message: result.message,
+          timestamp: new Date().toISOString(),
+        });
 
-          // Stop execution on error
-          break;
-        }
+        socket.emit('workflow:error', {
+          workflowId: data.workflowId,
+          error: result.message
+        });
       }
-
-      socket.emit('workflow:completed', { workflowId: data.workflowId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      socket.emit('console:log', {
+        type: 'error',
+        message: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString(),
+      });
       socket.emit('workflow:error', { workflowId: data.workflowId, error: errorMessage });
     }
   });

@@ -105,6 +105,11 @@ function generateMcpSettings(nodes: WorkflowNode[]): McpSettingsUpdate | null {
  * Generates SKILL.md content for a skill node
  */
 function generateSkillContent(data: SkillNodeData): string {
+  // AI가 생성한 skillContent가 있으면 그대로 사용
+  if (data.skillContent) {
+    return data.skillContent;
+  }
+
   const name = sanitizeName(data.skillId || data.label);
   const description = data.description || data.label;
 

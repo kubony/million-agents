@@ -7,11 +7,38 @@ import type {
   SkillNodeData,
   McpNodeData,
   OutputNodeData,
+  AgentRole,
 } from '../types/nodes';
 
-interface GeneratedWorkflow {
+export interface GeneratedWorkflow {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+}
+
+// AI 생성 결과 타입 (서버에서 반환)
+interface AIWorkflowResult {
+  workflowName: string;
+  description: string;
+  nodes: AIGeneratedNode[];
+  edges: { from: number; to: number }[];
+}
+
+interface AIGeneratedNode {
+  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  label: string;
+  description: string;
+  config: {
+    inputType?: 'text' | 'file' | 'select';
+    placeholder?: string;
+    role?: string;
+    tools?: string[];
+    model?: string;
+    systemPrompt?: string;
+    skillType?: 'official' | 'custom';
+    skillId?: string;
+    skillContent?: string;
+    outputType?: 'auto' | 'markdown' | 'document' | 'image';
+  };
 }
 
 interface WorkflowStep {
@@ -382,4 +409,161 @@ export function enhanceWorkflowFromPrompt(
 export function generateAndEnhanceWorkflow(prompt: string): GeneratedWorkflow {
   const baseWorkflow = generateWorkflowFromPrompt(prompt);
   return enhanceWorkflowFromPrompt(baseWorkflow, prompt);
+}
+
+/**
+ * AI 기반 워크플로우 생성 (서버 API 호출)
+ */
+export async function generateWorkflowWithAI(prompt: string): Promise<{
+  workflow: GeneratedWorkflow;
+  workflowName: string;
+}> {
+  const response = await fetch('/api/generate/workflow', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to generate workflow');
+  }
+
+  const aiResult: AIWorkflowResult = await response.json();
+  const workflow = convertAIResponseToWorkflow(aiResult);
+
+  return {
+    workflow,
+    workflowName: aiResult.workflowName,
+  };
+}
+
+/**
+ * AI 응답을 React Flow 워크플로우로 변환
+ */
+function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkflow {
+  const nodes: WorkflowNode[] = [];
+  const nodeIdMap: Map<number, string> = new Map();
+
+  const xSpacing = 300;
+  const startX = 100;
+  const centerY = 200;
+
+  // 노드 생성
+  aiResult.nodes.forEach((aiNode, index) => {
+    const id = nanoid();
+    nodeIdMap.set(index, id);
+
+    const position = {
+      x: startX + index * xSpacing,
+      y: centerY,
+    };
+
+    const baseData = {
+      label: aiNode.label,
+      description: aiNode.description,
+      status: 'idle' as const,
+      usedInputs: [] as string[],
+    };
+
+    switch (aiNode.type) {
+      case 'input':
+        nodes.push({
+          id,
+          type: 'input',
+          position,
+          data: {
+            ...baseData,
+            inputType: aiNode.config.inputType || 'text',
+            placeholder: aiNode.config.placeholder || aiNode.description,
+          } as InputNodeData,
+        });
+        break;
+
+      case 'subagent':
+        nodes.push({
+          id,
+          type: 'subagent',
+          position,
+          data: {
+            ...baseData,
+            role: (aiNode.config.role as AgentRole) || 'custom',
+            tools: aiNode.config.tools || ['Read', 'Write'],
+            model: (aiNode.config.model as 'sonnet' | 'opus' | 'haiku') || 'sonnet',
+            systemPrompt: aiNode.config.systemPrompt,
+          } as SubagentNodeData,
+        });
+        break;
+
+      case 'skill':
+        nodes.push({
+          id,
+          type: 'skill',
+          position,
+          data: {
+            ...baseData,
+            skillType: aiNode.config.skillType || 'official',
+            skillId: aiNode.config.skillId,
+            skillContent: aiNode.config.skillContent,
+          } as SkillNodeData,
+        });
+        break;
+
+      case 'mcp':
+        nodes.push({
+          id,
+          type: 'mcp',
+          position,
+          data: {
+            ...baseData,
+            serverType: 'stdio',
+            serverName: aiNode.label,
+            serverConfig: {},
+          } as McpNodeData,
+        });
+        break;
+
+      case 'output':
+        nodes.push({
+          id,
+          type: 'output',
+          position,
+          data: {
+            ...baseData,
+            outputType: aiNode.config.outputType || 'auto',
+          } as OutputNodeData,
+        });
+        break;
+    }
+  });
+
+  // 이전 노드 ID 연결 (usedInputs 설정)
+  aiResult.edges.forEach((edge) => {
+    const targetId = nodeIdMap.get(edge.to);
+    const sourceId = nodeIdMap.get(edge.from);
+    if (targetId && sourceId) {
+      const targetNode = nodes.find((n) => n.id === targetId);
+      if (targetNode && targetNode.data.usedInputs) {
+        (targetNode.data.usedInputs as string[]).push(sourceId);
+      }
+    }
+  });
+
+  // 엣지 생성
+  const edges: WorkflowEdge[] = aiResult.edges
+    .map((edge) => {
+      const sourceId = nodeIdMap.get(edge.from);
+      const targetId = nodeIdMap.get(edge.to);
+      if (!sourceId || !targetId) return null;
+
+      return {
+        id: `e-${sourceId}-${targetId}`,
+        source: sourceId,
+        target: targetId,
+        animated: true,
+      };
+    })
+    .filter((edge): edge is WorkflowEdge => edge !== null);
+
+  return { nodes, edges };
 }
