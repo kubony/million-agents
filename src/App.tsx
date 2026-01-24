@@ -7,7 +7,7 @@ import NodePalette from './components/layout/NodePalette';
 import FlowCanvas from './components/canvas/FlowCanvas';
 import RightPanel from './components/layout/RightPanel';
 import PromptBar from './components/layout/PromptBar';
-import ConsolePanel from './components/panels/ConsolePanel';
+import { FloatingConsolePanel } from './components/panels/ConsolePanel';
 import { usePanelStore } from './stores/panelStore';
 import { useExecutionStore } from './stores/executionStore';
 
@@ -80,7 +80,7 @@ function App() {
         </button>
 
         {/* Console Panel */}
-        <ConsolePanel isOpen={isConsoleOpen} onClose={() => setIsConsoleOpen(false)} />
+        <FloatingConsolePanel isOpen={isConsoleOpen} onClose={() => setIsConsoleOpen(false)} />
       </div>
     </ReactFlowProvider>
   );

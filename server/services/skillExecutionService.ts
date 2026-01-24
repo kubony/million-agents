@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import ExcelJS from 'exceljs';
-import PptxGenJS from 'pptxgenjs';
+import pptxgen from 'pptxgenjs';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -286,6 +286,7 @@ ${input}
       }
 
       // 2단계: PptxGenJS로 실제 파일 생성
+      const PptxGenJS = (pptxgen as any).default || pptxgen;
       const pptx = new PptxGenJS();
       pptx.author = pptData.author || 'Million Agent';
       pptx.title = pptData.title;

@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import type { WorkflowNode, WorkflowEdge, NodeStatus } from '../types/nodes';
+import type { NodeStatus } from '../types/nodes';
 
 const SOCKET_URL = 'http://localhost:3001';
 
@@ -45,7 +45,6 @@ export interface WorkflowCompletedData {
 
 class SocketService {
   private socket: Socket;
-  private connected: boolean = false;
 
   constructor() {
     this.socket = io(SOCKET_URL, {
@@ -57,12 +56,10 @@ class SocketService {
 
     this.socket.on('connect', () => {
       console.log('Connected to server');
-      this.connected = true;
     });
 
     this.socket.on('disconnect', () => {
       console.log('Disconnected from server');
-      this.connected = false;
     });
 
     this.socket.on('connect_error', (error) => {

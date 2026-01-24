@@ -11,9 +11,20 @@ export function setApiKey(key: string) {
 }
 
 export function getApiKey(): string | null {
-  if (!apiKey) {
-    apiKey = localStorage.getItem('claude_api_key');
+  // First check cached key
+  if (apiKey) {
+    return apiKey;
   }
+
+  // Then check environment variable (Vite)
+  const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  if (envKey) {
+    apiKey = envKey;
+    return apiKey;
+  }
+
+  // Finally check localStorage
+  apiKey = localStorage.getItem('claude_api_key');
   return apiKey;
 }
 

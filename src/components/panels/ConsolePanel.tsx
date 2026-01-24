@@ -4,7 +4,7 @@ import { useExecutionStore } from '../../stores/executionStore';
 import type { LogLevel } from '../../types/workflow';
 import clsx from 'clsx';
 
-interface ConsolePanelProps {
+interface FloatingConsolePanelProps {
   isOpen: boolean;
   onClose: () => void;
 }
@@ -32,7 +32,8 @@ function formatTime(timestamp: number): string {
   });
 }
 
-export default function ConsolePanel({ isOpen, onClose }: ConsolePanelProps) {
+// Floating console panel (shown at bottom of screen)
+export function FloatingConsolePanel({ isOpen, onClose }: FloatingConsolePanelProps) {
   const { logs, clearLogs, isRunning } = useExecutionStore();
   const [isMinimized, setIsMinimized] = useState(false);
   const [height, setHeight] = useState(250);
@@ -193,6 +194,99 @@ export default function ConsolePanel({ isOpen, onClose }: ConsolePanelProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Embedded console panel (for use in RightPanel tabs)
+export default function ConsolePanel() {
+  const { logs, clearLogs, isRunning } = useExecutionStore();
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Terminal className="w-5 h-5 text-amber-500" />
+          <h3 className="text-lg font-semibold text-white">Console</h3>
+          {isRunning && (
+            <span className="flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+              Running
+            </span>
+          )}
+          <span className="text-xs text-gray-500">({logs.length} logs)</span>
+        </div>
+        <button
+          onClick={clearLogs}
+          className="p-2 text-gray-400 hover:text-white hover:bg-surface-hover rounded-lg transition-colors"
+          title="Clear logs"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Logs */}
+      <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+        {logs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <p>No logs yet. Run the workflow to see output.</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className={clsx(
+                  'flex items-start gap-2 px-2 py-1 rounded hover:bg-surface-hover',
+                  log.level === 'error' && 'bg-red-500/10',
+                  log.level === 'warning' && 'bg-yellow-500/10',
+                  log.level === 'success' && 'bg-green-500/10'
+                )}
+              >
+                <span className="text-gray-600 shrink-0 text-xs">
+                  [{formatTime(log.timestamp)}]
+                </span>
+                <LogIcon level={log.level} />
+                <div className="flex-1 min-w-0">
+                  <span
+                    className={clsx(
+                      'text-xs',
+                      log.level === 'error' && 'text-red-400',
+                      log.level === 'warning' && 'text-yellow-400',
+                      log.level === 'success' && 'text-green-400',
+                      log.level === 'info' && 'text-gray-300'
+                    )}
+                  >
+                    {log.message}
+                  </span>
+                  {log.nodeId && (
+                    <span className="ml-2 text-purple-400 text-xs">
+                      [{log.nodeId.slice(0, 8)}]
+                    </span>
+                  )}
+                  {log.details && (
+                    <pre className="mt-1 p-2 bg-black/30 rounded text-xs text-gray-400 overflow-x-auto">
+                      {typeof log.details === 'string'
+                        ? log.details
+                        : JSON.stringify(log.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
