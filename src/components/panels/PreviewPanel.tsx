@@ -1,44 +1,28 @@
-import { Play, Download, FileText } from 'lucide-react';
+import { Download, FileText, Eye } from 'lucide-react';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export default function PreviewPanel() {
-  const { isRunning, results, startExecution, stopExecution } = useExecutionStore();
+  const { isRunning, results } = useExecutionStore();
   const { nodes } = useWorkflowStore();
 
   // Get the final output from the last output node
   const outputNodes = nodes.filter((n) => n.type === 'output');
   const lastResult = outputNodes.length > 0 ? results.get(outputNodes[0].id) : null;
 
-  const handleRun = () => {
-    if (isRunning) {
-      stopExecution();
-    } else {
-      startExecution();
-      // TODO: Actually execute the workflow
-    }
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="text-lg font-semibold text-white">Preview</h3>
-        <button
-          onClick={handleRun}
-          className={`
-            flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-            ${isRunning
-              ? 'bg-red-500 hover:bg-red-600 text-white'
-              : 'bg-accent hover:bg-accent-hover text-white'
-            }
-          `}
-        >
-          <Play className="w-4 h-4" />
-          {isRunning ? 'Stop' : 'Start'}
-        </button>
+        <div className="flex items-center gap-2">
+          <Eye className="w-5 h-5 text-gray-400" />
+          <h3 className="text-lg font-semibold text-white">Preview</h3>
+        </div>
+        {isRunning && (
+          <span className="text-sm text-blue-400 animate-pulse">Running...</span>
+        )}
       </div>
 
       {/* Execution Progress */}

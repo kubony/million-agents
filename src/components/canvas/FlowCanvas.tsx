@@ -21,6 +21,7 @@ import SkillNode from '../nodes/SkillNode';
 import McpNode from '../nodes/McpNode';
 import OutputNode from '../nodes/OutputNode';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { usePanelStore } from '../../stores/panelStore';
 import { validateConnection } from '../../utils/connectionValidator';
 
 const nodeTypes: NodeTypes = {
@@ -40,6 +41,8 @@ export default function FlowCanvas() {
     addEdge: storeAddEdge,
     setSelectedNode,
   } = useWorkflowStore();
+
+  const openStepPanel = usePanelStore((state) => state.openStepPanel);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -76,8 +79,9 @@ export default function FlowCanvas() {
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
       setSelectedNode(node.id);
+      openStepPanel();
     },
-    [setSelectedNode]
+    [setSelectedNode, openStepPanel]
   );
 
   const onPaneClick = useCallback(() => {
@@ -103,6 +107,8 @@ export default function FlowCanvas() {
       connectionLineStyle={{ strokeDasharray: '5 5' }}
       snapToGrid
       snapGrid={[15, 15]}
+      connectionRadius={40}
+      connectOnClick={true}
     >
       <Background
         variant={BackgroundVariant.Dots}

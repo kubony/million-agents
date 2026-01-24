@@ -1,8 +1,18 @@
-import { ArrowLeft, Share2, Settings, Save } from 'lucide-react';
+import { ArrowLeft, Settings, Save, Play, Square } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 
 export default function Header() {
   const { workflowName, setWorkflowName, isDraft } = useWorkflowStore();
+  const { isRunning, execute, cancel } = useWorkflowExecution();
+
+  const handleRun = () => {
+    if (isRunning) {
+      cancel();
+    } else {
+      execute();
+    }
+  };
 
   return (
     <header className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border">
@@ -28,23 +38,27 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Center section - App/Editor toggle */}
-      <div className="flex items-center gap-1 p-1 bg-surface-hover rounded-lg">
-        <button className="px-4 py-1.5 text-sm font-medium text-gray-400 hover:text-white rounded-md transition-colors">
-          App
-        </button>
-        <button className="px-4 py-1.5 text-sm font-medium bg-accent text-white rounded-md">
-          Editor
-        </button>
+      {/* Center section - Title */}
+      <div className="text-sm font-medium text-gray-400">
+        Visual Workflow Builder
       </div>
 
       {/* Right section */}
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500">Saved</span>
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-surface-hover hover:bg-border rounded-lg transition-colors">
-          <Share2 className="w-4 h-4" />
-          <span className="text-sm font-medium">Share App</span>
+        <button
+          onClick={handleRun}
+          className={`
+            flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+            ${isRunning
+              ? 'bg-red-500 hover:bg-red-600 text-white'
+              : 'bg-accent hover:bg-accent-hover text-white'
+            }
+          `}
+        >
+          {isRunning ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          {isRunning ? 'Stop' : 'Run'}
         </button>
 
         <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
