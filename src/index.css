@@ -12,17 +12,16 @@
   --color-accent: #8b5cf6;
   --color-accent-hover: #7c3aed;
 
-  /* Node colors */
-  --color-node-input: #fef3c7;
-  --color-node-input-border: #fcd34d;
-  --color-node-generate: #4f46e5;
-  --color-node-generate-bg: #2e2a5a;
-  --color-node-skill: #06b6d4;
-  --color-node-skill-bg: #164e63;
-  --color-node-mcp: #ec4899;
-  --color-node-mcp-bg: #500724;
-  --color-node-output: #10b981;
-  --color-node-output-bg: #064e3b;
+  /* Node colors - 다크 테마 통일 */
+  --color-node-bg: #1f2937;           /* 모든 노드 배경 통일 (gray-800) */
+  --color-node-border: #374151;       /* 기본 테두리 (gray-700) */
+
+  /* 헤더 컬러 (memorialbanana 스타일) */
+  --color-node-input-header: #f59e0b;      /* amber-500 */
+  --color-node-generate-header: #4f46e5;   /* indigo-600 */
+  --color-node-skill-header: #06b6d4;      /* cyan-500 */
+  --color-node-mcp-header: #ec4899;        /* pink-500 */
+  --color-node-output-header: #10b981;     /* emerald-500 */
 }
 
 /* Base styles */
@@ -132,24 +131,44 @@ body {
   }
 }
 
-/* Node base styles */
+/* Node base styles - memorialbanana 스타일 */
 .workflow-node {
+  background-color: #1f2937;
   border-radius: 12px;
-  border-width: 2px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  border: 2px solid #374151;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.5),
+    0 4px 6px -2px rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
   min-width: 220px;
   max-width: 280px;
+  overflow: hidden;
 }
 
 .workflow-node:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-  transform: translateY(-1px);
+  box-shadow:
+    0 20px 40px -8px rgba(0, 0, 0, 0.6),
+    0 8px 16px -4px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+  border-color: #4b5563;
 }
 
 .workflow-node.selected {
   ring: 2px;
   ring-offset: 2px;
+}
+
+/* 노드 헤더 공통 스타일 */
+.workflow-node .node-header {
+  padding: 10px 14px;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+/* 노드 컨텐츠 영역 */
+.workflow-node .node-content {
+  padding: 12px 14px;
+  border-top: 1px solid #374151;
 }
 
 /* Handle styles */

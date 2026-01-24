@@ -13,13 +13,10 @@ function McpNode({ data, selected }: McpNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Plug className="w-4 h-4 text-pink-300" />}
-      headerColor="bg-node-mcp"
-      bgColor="bg-node-mcp-bg"
-      borderColor="border-node-mcp"
+      headerIcon={<Plug className="w-4 h-4 text-pink-200" />}
+      headerColor="bg-pink-600"
       showTargetHandle={true}
       showSourceHandle={true}
-      dark={true}
     >
       <div className="space-y-2">
         {data.serverName && (

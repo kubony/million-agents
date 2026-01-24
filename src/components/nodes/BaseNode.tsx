@@ -18,11 +18,8 @@ interface BaseNodeProps {
   children?: ReactNode;
   headerIcon?: ReactNode;
   headerColor?: string;
-  bgColor?: string;
-  borderColor?: string;
   showSourceHandle?: boolean;
   showTargetHandle?: boolean;
-  dark?: boolean;
 }
 
 function StatusIcon({ status }: { status: NodeStatus }) {
@@ -44,56 +41,64 @@ function BaseNode({
   children,
   headerIcon,
   headerColor = 'bg-gray-700',
-  bgColor = 'bg-surface',
-  borderColor = 'border-gray-600',
   showSourceHandle = true,
   showTargetHandle = true,
-  dark = true,
 }: BaseNodeProps) {
-  const textColor = dark ? 'text-white' : 'text-gray-900';
-  const descColor = dark ? 'text-gray-400' : 'text-gray-600';
+  // 상태에 따른 테두리 색상
+  const getStatusBorderClass = () => {
+    switch (data.status) {
+      case 'running':
+        return 'border-indigo-500 animate-pulse-border';
+      case 'completed':
+        return 'border-green-500';
+      case 'error':
+        return 'border-red-500';
+      default:
+        return '';
+    }
+  };
 
   return (
     <div
       className={clsx(
         'workflow-node',
-        bgColor,
-        borderColor,
-        'border-2 rounded-xl overflow-hidden',
         selected && 'ring-2 ring-accent ring-offset-2 ring-offset-canvas',
-        data.status === 'running' && 'animate-pulse-border'
+        getStatusBorderClass()
       )}
     >
-      {/* Header */}
-      <div className={clsx('flex items-center justify-between px-3 py-2', headerColor)}>
+      {/* Header - 컬러풀한 헤더 */}
+      <div className={clsx(
+        'node-header flex items-center justify-between',
+        headerColor
+      )}>
         <div className="flex items-center gap-2">
           {headerIcon}
-          <span className={clsx('font-medium text-sm', textColor)}>{data.label}</span>
+          <span className="font-semibold text-sm text-white">{data.label}</span>
         </div>
-        <button className="p-1 hover:bg-white/10 rounded transition-colors">
+        <div className="flex items-center gap-1">
           <StatusIcon status={data.status} />
-        </button>
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-3">
+      {/* Content - 다크 배경 통일 */}
+      <div className="node-content">
         {data.description && (
-          <p className={clsx('text-sm mb-2', descColor)}>{data.description}</p>
+          <p className="text-sm text-gray-400 mb-3">{data.description}</p>
         )}
 
         {children}
 
         {/* Used Inputs */}
         {data.usedInputs && data.usedInputs.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-gray-700">
-            <p className="text-xs text-gray-500 mb-1">Used in this step</p>
-            <div className="flex flex-wrap gap-1">
+          <div className="mt-3 pt-3 border-t border-gray-700/50">
+            <p className="text-xs text-gray-500 mb-2">Used in this step</p>
+            <div className="flex flex-wrap gap-1.5">
               {data.usedInputs.map((inputId) => (
                 <span
                   key={inputId}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-800 border border-gray-700"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-gray-700/50 border border-gray-600 text-gray-300"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   {inputId}
                 </span>
               ))}
@@ -107,14 +112,14 @@ function BaseNode({
         <Handle
           type="target"
           position={Position.Left}
-          className="!bg-gray-500 !border-white"
+          className="!bg-gray-500 !border-2 !border-white"
         />
       )}
       {showSourceHandle && (
         <Handle
           type="source"
           position={Position.Right}
-          className="!bg-gray-500 !border-white"
+          className="!bg-gray-500 !border-2 !border-white"
         />
       )}
     </div>

@@ -13,13 +13,10 @@ function SubagentNode({ data, selected }: SubagentNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Sparkles className="w-4 h-4 text-purple-300" />}
-      headerColor="bg-node-generate"
-      bgColor="bg-node-generate-bg"
-      borderColor="border-node-generate"
+      headerIcon={<Sparkles className="w-4 h-4 text-indigo-200" />}
+      headerColor="bg-indigo-600"
       showTargetHandle={true}
       showSourceHandle={true}
-      dark={true}
     >
       <div className="space-y-2">
         {/* Tools badges */}

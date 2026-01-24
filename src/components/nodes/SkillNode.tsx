@@ -13,13 +13,10 @@ function SkillNode({ data, selected }: SkillNodeProps) {
     <BaseNode
       data={data}
       selected={selected}
-      headerIcon={<Zap className="w-4 h-4 text-cyan-300" />}
-      headerColor="bg-node-skill"
-      bgColor="bg-node-skill-bg"
-      borderColor="border-node-skill"
+      headerIcon={<Zap className="w-4 h-4 text-cyan-200" />}
+      headerColor="bg-cyan-600"
       showTargetHandle={true}
       showSourceHandle={true}
-      dark={true}
     >
       <div className="space-y-2">
         {data.skillType === 'official' && data.skillId && (
