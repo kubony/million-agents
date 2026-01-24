@@ -2,6 +2,29 @@
 
 Claude Code 기반의 비주얼 워크플로우 빌더입니다. 노드 기반 UI로 AI 에이전트 워크플로우를 설계하고 실행할 수 있습니다.
 
+## Claude Code 플러그인
+
+이 프로젝트는 Claude Code 플러그인으로 사용할 수 있습니다.
+
+### 포함된 스킬
+
+| 스킬 | 설명 |
+|------|------|
+| `/visual-builder` | Visual Workflow Builder 실행 |
+| `/git-commit-push` | Git 커밋 및 푸시 |
+| `/skill-creator` | 새로운 스킬 생성 |
+| `/subagent-creator` | 서브 에이전트 생성 |
+| `/slash-command-creator` | 슬래시 커맨드 생성 |
+| `/hook-creator` | 훅 생성 |
+
+### 사용법
+
+Claude Code에서 다음과 같이 사용:
+
+```
+/visual-builder
+```
+
 ## 스크린샷
 
 ### 워크플로우 편집기
