@@ -1,1 +1,20 @@
 .cops/
+# .obsidian/
+.venv/
+.git/
+node_modules/
+__pycache__/
+*.pyc
+
+# Activity stream logs (real-time visualization)
+.claude/stream.jsonl
+.claude/.activity_ids.json
+
+# Agent-skill visualizer generated data (should only be in webapp/public/data/)
+/graph-data.json
+
+.env
+.creds/
+.credentials/
+.mcp.json
+
