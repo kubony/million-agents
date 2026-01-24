@@ -112,14 +112,12 @@ function BaseNode({
         <Handle
           type="target"
           position={Position.Left}
-          className="!bg-gray-500 !border-2 !border-white"
         />
       )}
       {showSourceHandle && (
         <Handle
           type="source"
           position={Position.Right}
-          className="!bg-gray-500 !border-2 !border-white"
         />
       )}
     </div>
