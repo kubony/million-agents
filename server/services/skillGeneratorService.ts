@@ -285,21 +285,42 @@ Generate complete, working code. Respond with JSON only.`;
     progress: SkillProgressCallback
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      // 전역 venv의 pip 사용
       const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const pipPath = path.join(homeDir, '.claude', 'venv', 'bin', 'pip');
+      const venvPythonPath = path.join(homeDir, '.claude', 'venv', 'bin', 'python');
 
       let command: string;
       let args: string[];
 
-      if (existsSync(pipPath)) {
-        // 전역 venv pip 사용
-        command = pipPath;
+      // uv를 우선 사용 (10-100x 빠름)
+      // uv pip install --python <venv-python> -r requirements.txt
+      const useUv = this.checkCommandExists('uv');
+
+      if (useUv && existsSync(venvPythonPath)) {
+        command = 'uv';
+        args = ['pip', 'install', '--python', venvPythonPath, '-r', requirementsPath];
+        progress({
+          step: 'installing',
+          message: '⚡ uv로 패키지 설치 중 (고속)',
+          detail: 'uv pip install 실행 중...',
+        });
+      } else if (existsSync(path.join(homeDir, '.claude', 'venv', 'bin', 'pip'))) {
+        // fallback: 전역 venv pip 사용
+        command = path.join(homeDir, '.claude', 'venv', 'bin', 'pip');
         args = ['install', '-r', requirementsPath];
+        progress({
+          step: 'installing',
+          message: '📦 pip으로 패키지 설치 중',
+          detail: 'pip install 실행 중...',
+        });
       } else {
-        // 시스템 pip 사용
+        // fallback: 시스템 pip 사용
         command = 'pip3';
         args = ['install', '-r', requirementsPath];
+        progress({
+          step: 'installing',
+          message: '📦 pip으로 패키지 설치 중',
+          detail: 'pip install 실행 중...',
+        });
       }
 
       console.log(`Installing dependencies: ${command} ${args.join(' ')}`);
@@ -315,7 +336,7 @@ Generate complete, working code. Respond with JSON only.`;
         output += data.toString();
         const lines = data.toString().trim().split('\n');
         for (const line of lines) {
-          if (line.includes('Successfully installed') || line.includes('Requirement already satisfied')) {
+          if (line.includes('Successfully installed') || line.includes('Requirement already satisfied') || line.includes('Installed')) {
             progress({
               step: 'installing',
               message: '📦 패키지 설치 중',
@@ -338,16 +359,26 @@ Generate complete, working code. Respond with JSON only.`;
           });
           resolve();
         } else {
-          console.error('pip install failed:', errorOutput);
-          reject(new Error(`pip install failed with code ${code}`));
+          console.error('Package install failed:', errorOutput);
+          reject(new Error(`Package install failed with code ${code}`));
         }
       });
 
       proc.on('error', (err) => {
-        console.error('Failed to start pip:', err);
+        console.error('Failed to start package installer:', err);
         reject(err);
       });
     });
+  }
+
+  private checkCommandExists(cmd: string): boolean {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`which ${cmd}`, { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
