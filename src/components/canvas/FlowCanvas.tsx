@@ -24,6 +24,8 @@ import OutputNode from '../nodes/OutputNode';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { usePanelStore } from '../../stores/panelStore';
 import { validateConnection } from '../../utils/connectionValidator';
+import { syncEdge, removeEdge as removeEdgeSync, deleteNode } from '../../services/syncService';
+import type { WorkflowNode, WorkflowEdge } from '../../types/nodes';
 
 const nodeTypes: NodeTypes = {
   input: InputNode,
@@ -48,6 +50,17 @@ export default function FlowCanvas() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // Handle node deletions - sync to filesystem
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          const nodeToDelete = nodes.find(n => n.id === change.id);
+          if (nodeToDelete) {
+            deleteNode(nodeToDelete as WorkflowNode).catch(err => {
+              console.error('Failed to delete node from filesystem:', err);
+            });
+          }
+        }
+      }
       setNodes(applyNodeChanges(changes, nodes as Node[]) as typeof nodes);
     },
     [nodes, setNodes]
@@ -55,9 +68,20 @@ export default function FlowCanvas() {
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      // Handle edge removals - sync to filesystem
+      for (const change of changes) {
+        if (change.type === 'remove') {
+          const edgeToRemove = edges.find(e => e.id === change.id);
+          if (edgeToRemove) {
+            removeEdgeSync(edgeToRemove as WorkflowEdge, nodes as WorkflowNode[]).catch(err => {
+              console.error('Failed to remove edge from filesystem:', err);
+            });
+          }
+        }
+      }
       setEdges(applyEdgeChanges(changes, edges));
     },
-    [edges, setEdges]
+    [edges, nodes, setEdges]
   );
 
   const onConnect: OnConnect = useCallback(
@@ -67,12 +91,19 @@ export default function FlowCanvas() {
         return;
       }
 
-      setEdges(addEdge({ ...params, animated: true }, edges));
-      storeAddEdge({
+      const newEdge: WorkflowEdge = {
         id: `e-${params.source}-${params.target}`,
         source: params.source!,
         target: params.target!,
         animated: true,
+      };
+
+      setEdges(addEdge({ ...params, animated: true }, edges));
+      storeAddEdge(newEdge);
+
+      // Sync edge to filesystem (updates subagent's skills field, etc.)
+      syncEdge(newEdge, nodes as WorkflowNode[]).catch(err => {
+        console.error('Failed to sync edge to filesystem:', err);
       });
     },
     [nodes, edges, setEdges, storeAddEdge]

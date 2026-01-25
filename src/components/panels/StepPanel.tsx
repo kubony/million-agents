@@ -1,5 +1,7 @@
+import { useEffect, useRef, useCallback } from 'react';
 import { Trash2, Sparkles, MessageSquare, Zap, Terminal, Anchor, BarChart3, Settings2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { syncNode, deleteNode } from '../../services/syncService';
 import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, CommandNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 
@@ -54,6 +56,31 @@ function getNodeTypeName(type: string | undefined) {
 
 export default function StepPanel({ node }: StepPanelProps) {
   const { updateNode, removeNode } = useWorkflowStore();
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced sync to filesystem when node changes
+  const debouncedSync = useCallback((nodeToSync: WorkflowNode) => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      syncNode(nodeToSync).catch(err => {
+        console.error('Failed to sync node to filesystem:', err);
+      });
+    }, 500); // 500ms debounce
+  }, []);
+
+  // Sync when node data changes (skip input/output nodes)
+  useEffect(() => {
+    if (node && node.type !== 'input' && node.type !== 'output') {
+      debouncedSync(node);
+    }
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, [node, debouncedSync]);
 
   if (!node) {
     return (
@@ -65,6 +92,10 @@ export default function StepPanel({ node }: StepPanelProps) {
   }
 
   const handleDelete = () => {
+    // Sync deletion to filesystem
+    deleteNode(node).catch(err => {
+      console.error('Failed to delete node from filesystem:', err);
+    });
     removeNode(node.id);
   };
 

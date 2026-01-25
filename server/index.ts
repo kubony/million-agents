@@ -10,6 +10,7 @@ import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
 import { skillGeneratorService } from './services/skillGeneratorService';
+import { nodeSyncService } from './services/nodeSyncService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
@@ -102,6 +103,86 @@ app.get('/api/settings/api-key', async (req, res) => {
   try {
     const settings = await fileService.getApiSettings();
     res.json(settings);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Sync node to file system
+app.post('/api/sync/node', async (req, res) => {
+  try {
+    const { node } = req.body;
+    if (!node) {
+      return res.status(400).json({ message: 'Node data is required' });
+    }
+
+    const result = await nodeSyncService.syncNode(node);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ message: result.error });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Delete node from file system
+app.delete('/api/sync/node', async (req, res) => {
+  try {
+    const { node } = req.body;
+    if (!node) {
+      return res.status(400).json({ message: 'Node data is required' });
+    }
+
+    const result = await nodeSyncService.deleteNode(node);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ message: result.error });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Sync edge (connection) to file system
+app.post('/api/sync/edge', async (req, res) => {
+  try {
+    const { edge, nodes } = req.body;
+    if (!edge || !nodes) {
+      return res.status(400).json({ message: 'Edge and nodes data are required' });
+    }
+
+    const result = await nodeSyncService.syncEdge(edge, nodes);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ message: result.error });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Remove edge from file system
+app.delete('/api/sync/edge', async (req, res) => {
+  try {
+    const { edge, nodes } = req.body;
+    if (!edge || !nodes) {
+      return res.status(400).json({ message: 'Edge and nodes data are required' });
+    }
+
+    const result = await nodeSyncService.removeEdge(edge, nodes);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ message: result.error });
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ message: errorMessage });

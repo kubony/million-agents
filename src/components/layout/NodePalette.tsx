@@ -1,6 +1,7 @@
 import { MessageSquare, Sparkles, BarChart3, Zap, Terminal, Anchor } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { nanoid } from 'nanoid';
+import { syncNode } from '../../services/syncService';
 import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, OutputNodeData } from '../../types/nodes';
 
 interface PaletteItem {
@@ -149,6 +150,11 @@ export default function NodePalette() {
   const handleAddNode = (type: PaletteItem['type']) => {
     const node = createDefaultNodeData(type);
     addNode(node);
+
+    // Sync node to filesystem (input/output nodes are skipped in syncNode)
+    syncNode(node).catch(err => {
+      console.error('Failed to sync node to filesystem:', err);
+    });
   };
 
   return (
