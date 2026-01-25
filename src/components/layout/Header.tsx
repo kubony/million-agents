@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { ArrowLeft, Settings, Save, Download, Play, Trash2, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Settings, Save, Download, Play, Trash2, RefreshCw, Home } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
@@ -9,6 +10,7 @@ import SettingsDialog from '../dialogs/SettingsDialog';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
+  const navigate = useNavigate();
   const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow, mergeExistingConfig } = useWorkflowStore();
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -58,8 +60,12 @@ export default function Header() {
     <header className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border">
       {/* Left section */}
       <div className="flex items-center gap-4">
-        <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
-          <ArrowLeft className="w-5 h-5 text-gray-400" />
+        <button
+          onClick={() => navigate('/')}
+          className="p-2 hover:bg-surface-hover rounded-lg transition-colors group"
+          title="Back to Home"
+        >
+          <Home className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
         </button>
 
         <div className="flex items-center gap-3">
