@@ -9,6 +9,7 @@ import type {
   OutputNodeData,
   AgentRole,
 } from '../types/nodes';
+import { useSettingsStore } from '../stores/settingsStore';
 
 export interface GeneratedWorkflow {
   nodes: WorkflowNode[];
@@ -423,10 +424,24 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
 }> {
   let response: Response;
 
+  // Get settings from store
+  const { apiMode, apiKey, proxyUrl } = useSettingsStore.getState();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-API-Mode': apiMode,
+  };
+
+  if (apiMode === 'direct' && apiKey) {
+    headers['X-API-Key'] = apiKey;
+  } else if (apiMode === 'proxy' && proxyUrl) {
+    headers['X-Proxy-URL'] = proxyUrl;
+  }
+
   try {
     response = await fetch('/api/generate/workflow', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ prompt }),
     });
   } catch (err) {

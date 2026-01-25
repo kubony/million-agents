@@ -4,12 +4,14 @@ import { useWorkflowStore } from '../../stores/workflowStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
 import SaveDialog from '../dialogs/SaveDialog';
+import SettingsDialog from '../dialogs/SettingsDialog';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
   const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow } = useWorkflowStore();
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
 
   const handleExport = () => {
@@ -112,7 +114,11 @@ export default function Header() {
           <Save className="w-5 h-5 text-gray-400" />
         </button>
 
-        <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
+        <button
+          onClick={() => setIsSettingsDialogOpen(true)}
+          className="p-2 hover:bg-surface-hover rounded-lg transition-colors"
+          title="설정"
+        >
           <Settings className="w-5 h-5 text-gray-400" />
         </button>
       </div>
@@ -125,6 +131,12 @@ export default function Header() {
           config={exportConfig}
         />
       )}
+
+      {/* Settings Dialog */}
+      <SettingsDialog
+        isOpen={isSettingsDialogOpen}
+        onClose={() => setIsSettingsDialogOpen(false)}
+      />
     </header>
   );
 }

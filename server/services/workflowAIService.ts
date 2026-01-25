@@ -1,5 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+// API 설정 타입
+export interface ApiSettings {
+  apiMode: 'proxy' | 'direct';
+  apiKey?: string;
+  proxyUrl?: string;
+}
+
 // AI가 생성하는 워크플로우 결과 타입
 export interface AIWorkflowResult {
   workflowName: string;
@@ -157,15 +164,37 @@ ${AVAILABLE_TOOLS.join(', ')}
 `;
 
 export class WorkflowAIService {
-  private client: Anthropic;
+  private getClient(settings?: ApiSettings): Anthropic {
+    // 1. Direct mode with user-provided API key
+    if (settings?.apiMode === 'direct' && settings.apiKey) {
+      return new Anthropic({
+        apiKey: settings.apiKey,
+      });
+    }
 
-  constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+    // 2. Proxy mode with custom base URL
+    if (settings?.apiMode === 'proxy' && settings.proxyUrl) {
+      return new Anthropic({
+        baseURL: settings.proxyUrl,
+        // Proxy server handles the API key
+        apiKey: process.env.ANTHROPIC_API_KEY || 'proxy-mode',
+      });
+    }
+
+    // 3. Default: use environment variable
+    const envApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!envApiKey) {
+      throw new Error('API 키가 설정되지 않았습니다. 설정에서 API 키를 입력하거나 프록시 서버를 설정하세요.');
+    }
+
+    return new Anthropic({
+      apiKey: envApiKey,
     });
   }
 
-  async generate(prompt: string): Promise<AIWorkflowResult> {
+  async generate(prompt: string, settings?: ApiSettings): Promise<AIWorkflowResult> {
+    const client = this.getClient(settings);
+
     const userPrompt = `다음 워크플로우를 설계해주세요: "${prompt}"
 
 반드시 JSON만 반환하세요. 마크다운 코드블록 없이 순수 JSON만 응답하세요.`;
@@ -173,7 +202,7 @@ export class WorkflowAIService {
     let responseText = '';
 
     // Anthropic SDK 사용
-    const response = await this.client.messages.create({
+    const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
       system: SYSTEM_PROMPT,

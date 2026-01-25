@@ -84,8 +84,18 @@ app.post('/api/generate/workflow', async (req, res) => {
       return res.status(400).json({ message: 'Prompt is required' });
     }
 
-    console.log('Generating workflow for prompt:', prompt);
-    const result = await workflowAIService.generate(prompt);
+    // Get API settings from headers
+    const apiMode = req.headers['x-api-mode'] as string || 'proxy';
+    const apiKey = req.headers['x-api-key'] as string;
+    const proxyUrl = req.headers['x-proxy-url'] as string;
+
+    console.log('Generating workflow for prompt:', prompt, 'mode:', apiMode);
+
+    const result = await workflowAIService.generate(prompt, {
+      apiMode: apiMode as 'proxy' | 'direct',
+      apiKey,
+      proxyUrl,
+    });
     console.log('Workflow generated:', result.workflowName);
 
     res.json(result);
