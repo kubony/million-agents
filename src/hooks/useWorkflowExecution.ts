@@ -1,34 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useExecutionStore } from '../stores/executionStore';
-import { executeWorkflow } from '../services/localExecutor';
-import type { WorkflowResult } from '../services/socketService';
-
-// 워크플로우 결과를 로컬 프로젝트에 저장하는 API 호출
-async function saveWorkflowOutput(
-  workflowName: string,
-  files: Array<{ name: string; content: string }>
-): Promise<{ success: boolean; outputDir?: string; error?: string }> {
-  try {
-    const response = await fetch('/api/save/workflow-output', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflowName, files }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      return { success: false, error: error.message };
-    }
-
-    return await response.json();
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to save files',
-    };
-  }
-}
+import {
+  socketService,
+  type NodeUpdateEvent,
+  type ConsoleLogEvent,
+  type WorkflowCompletedData,
+} from '../services/socketService';
 
 export function useWorkflowExecution() {
   const { nodes, edges, workflowName, updateNodeStatus } = useWorkflowStore();
@@ -45,9 +23,75 @@ export function useWorkflowExecution() {
   } = useExecutionStore();
 
   const [savedOutputDir, setSavedOutputDir] = useState<string | null>(null);
+  const workflowIdRef = useRef<string | null>(null);
 
-  // Execute workflow locally (no server needed)
-  const execute = useCallback(async () => {
+  // Socket.IO 이벤트 리스너 등록
+  useEffect(() => {
+    // 노드 업데이트 이벤트
+    const handleNodeUpdate = (update: NodeUpdateEvent) => {
+      const { nodeId, status, progress, result, error } = update;
+
+      if (status === 'running') {
+        updateNodeStatus(nodeId, 'running', progress || 0);
+        setCurrentNode(nodeId);
+      } else if (status === 'completed') {
+        updateNodeStatus(nodeId, 'completed', 100);
+        markNodeCompleted(nodeId, result);
+      } else if (status === 'error') {
+        updateNodeStatus(nodeId, 'error', 0);
+        markNodeFailed(nodeId, error || 'Unknown error');
+      }
+    };
+
+    // 콘솔 로그 이벤트
+    const handleConsoleLog = (log: ConsoleLogEvent) => {
+      const level = log.type === 'warn' ? 'warning' : log.type === 'debug' ? 'info' : log.type;
+      addLog(level as 'info' | 'warning' | 'error' | 'success', log.message, log.nodeId);
+    };
+
+    // 워크플로우 완료 이벤트
+    const handleWorkflowCompleted = (data: WorkflowCompletedData) => {
+      if (data.results) {
+        setWorkflowResults(data.results);
+      }
+      if (data.outputDir) {
+        setSavedOutputDir(data.outputDir);
+      }
+      stopExecution();
+      addLog('success', '워크플로우 실행 완료!');
+    };
+
+    // 워크플로우 에러 이벤트
+    const handleWorkflowError = (data: { workflowId: string; error: string }) => {
+      stopExecution();
+      addLog('error', `실행 오류: ${data.error}`);
+    };
+
+    // 워크플로우 취소 이벤트
+    const handleWorkflowCancelled = () => {
+      stopExecution();
+      addLog('warning', '워크플로우 실행이 취소되었습니다.');
+    };
+
+    // 이벤트 리스너 등록
+    socketService.on('node:update', handleNodeUpdate);
+    socketService.on('console:log', handleConsoleLog);
+    socketService.on('workflow:completed', handleWorkflowCompleted);
+    socketService.on('workflow:error', handleWorkflowError);
+    socketService.on('workflow:cancelled', handleWorkflowCancelled);
+
+    // 클린업
+    return () => {
+      socketService.off('node:update', handleNodeUpdate);
+      socketService.off('console:log', handleConsoleLog);
+      socketService.off('workflow:completed', handleWorkflowCompleted);
+      socketService.off('workflow:error', handleWorkflowError);
+      socketService.off('workflow:cancelled', handleWorkflowCancelled);
+    };
+  }, [addLog, markNodeCompleted, markNodeFailed, setCurrentNode, setWorkflowResults, stopExecution, updateNodeStatus]);
+
+  // Socket.IO를 통해 서버에서 워크플로우 실행 (Claude CLI 사용)
+  const execute = useCallback(() => {
     if (nodes.length === 0) {
       addLog('warning', 'No nodes to execute');
       return;
@@ -58,82 +102,28 @@ export function useWorkflowExecution() {
     startExecution();
     setSavedOutputDir(null);
 
-    addLog('info', `워크플로우 "${workflowName}" 실행 시작...`);
+    // 워크플로우 ID 생성
+    const workflowId = `workflow-${Date.now()}`;
+    workflowIdRef.current = workflowId;
 
-    try {
-      const results = await executeWorkflow(nodes, edges, {
-        onNodeStart: (nodeId) => {
-          updateNodeStatus(nodeId, 'running', 0);
-          setCurrentNode(nodeId);
-        },
-        onNodeProgress: (nodeId, progress) => {
-          updateNodeStatus(nodeId, 'running', progress);
-        },
-        onNodeComplete: (nodeId, result) => {
-          updateNodeStatus(nodeId, 'completed', 100);
-          markNodeCompleted(nodeId, result);
-        },
-        onNodeError: (nodeId, error) => {
-          updateNodeStatus(nodeId, 'error', 0);
-          markNodeFailed(nodeId, error);
-        },
-        onLog: (level, message, nodeId) => {
-          addLog(level, message, nodeId);
-        },
-      });
+    addLog('info', `워크플로우 "${workflowName}" 실행 시작 (Claude CLI)...`);
 
-      // Collect results for display
-      const workflowResults: WorkflowResult[] = [];
-      const files: Array<{ name: string; content: string }> = [];
-
-      for (const [nodeId, result] of results) {
-        const node = nodes.find((n) => n.id === nodeId);
-        const resultText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-
-        workflowResults.push({
-          nodeId,
-          label: node?.data.label || nodeId,
-          success: true,
-          result: resultText,
-        });
-
-        // Collect output node results for saving
-        if (node?.type === 'output') {
-          const fileName = `${node.data.label.replace(/\s+/g, '_')}.md`;
-          files.push({
-            name: fileName,
-            content: resultText,
-          });
-        }
-      }
-
-      setWorkflowResults(workflowResults);
-      stopExecution();
-      addLog('success', '워크플로우 실행 완료!');
-
-      // Save files to local project
-      if (files.length > 0) {
-        addLog('info', `${files.length}개 파일 저장 중...`);
-
-        const saveResult = await saveWorkflowOutput(workflowName, files);
-
-        if (saveResult.success && saveResult.outputDir) {
-          setSavedOutputDir(saveResult.outputDir);
-          addLog('info', `파일 저장 완료: ${saveResult.outputDir}`);
-          files.forEach((file) => {
-            addLog('info', `  - ${file.name}`);
-          });
-        } else {
-          addLog('error', `파일 저장 실패: ${saveResult.error}`);
-        }
-      }
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      stopExecution();
-      addLog('error', `실행 오류: ${errorMessage}`);
-    }
-  }, [nodes, edges, workflowName, addLog, clearLogs, startExecution, stopExecution, updateNodeStatus, setCurrentNode, markNodeCompleted, markNodeFailed, setWorkflowResults]);
+    // Socket.IO로 워크플로우 실행 요청
+    socketService.executeWorkflow({
+      workflowId,
+      workflowName,
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        type: n.type || 'unknown',
+        data: n.data as Record<string, unknown>,
+      })),
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+      })),
+    });
+  }, [nodes, edges, workflowName, addLog, clearLogs, startExecution]);
 
   return {
     isRunning,
