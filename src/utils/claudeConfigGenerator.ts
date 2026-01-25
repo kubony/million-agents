@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, SubagentNodeData, SkillNodeData, McpNodeData, InputNodeData, OutputNodeData } from '../types/nodes';
+import type { WorkflowNode, WorkflowEdge, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, InputNodeData, OutputNodeData } from '../types/nodes';
 import type { ClaudeConfigExport, SkillConfig, CommandConfig, AgentConfig, McpSettingsUpdate, SaveLocation } from '../types/save';
 
 /**
@@ -78,27 +78,16 @@ function generateCommandConfigs(
 }
 
 /**
- * Generates MCP settings from MCP nodes
+ * Generates hook settings from hook nodes
  */
 function generateMcpSettings(nodes: WorkflowNode[]): McpSettingsUpdate | null {
-  const mcpNodes = nodes.filter((n): n is WorkflowNode & { data: McpNodeData } => n.type === 'mcp');
+  const hookNodes = nodes.filter((n): n is WorkflowNode & { data: HookNodeData } => n.type === 'hook');
 
-  if (mcpNodes.length === 0) return null;
+  if (hookNodes.length === 0) return null;
 
-  const mcpServers: McpSettingsUpdate['mcpServers'] = {};
-
-  mcpNodes.forEach((node) => {
-    const data = node.data;
-    mcpServers[data.serverName] = {
-      type: data.serverType,
-      command: data.serverConfig.command,
-      args: data.serverConfig.args,
-      url: data.serverConfig.url,
-      env: data.serverConfig.env,
-    };
-  });
-
-  return { mcpServers };
+  // Hook nodes don't produce MCP settings, they produce hook configurations
+  // Return null for now as hooks are configured differently
+  return null;
 }
 
 /**
@@ -237,9 +226,14 @@ function generateCommandContent(
       }
     }
 
-    if (node.type === 'mcp') {
-      const data = node.data as McpNodeData;
-      lines.push(`   - MCP Server: ${data.serverName}`);
+    if (node.type === 'command') {
+      const data = node.data as CommandNodeData;
+      lines.push(`   - Command: /${data.commandName}`);
+    }
+
+    if (node.type === 'hook') {
+      const data = node.data as HookNodeData;
+      lines.push(`   - Hook: ${data.hookEvent} (${data.hookMatcher || '*'})`);
     }
 
     lines.push('');

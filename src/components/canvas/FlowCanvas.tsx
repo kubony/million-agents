@@ -18,7 +18,8 @@ import {
 import InputNode from '../nodes/InputNode';
 import SubagentNode from '../nodes/SubagentNode';
 import SkillNode from '../nodes/SkillNode';
-import McpNode from '../nodes/McpNode';
+import CommandNode from '../nodes/CommandNode';
+import HookNode from '../nodes/HookNode';
 import OutputNode from '../nodes/OutputNode';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { usePanelStore } from '../../stores/panelStore';
@@ -28,7 +29,8 @@ const nodeTypes: NodeTypes = {
   input: InputNode,
   subagent: SubagentNode,
   skill: SkillNode,
-  mcp: McpNode,
+  command: CommandNode,
+  hook: HookNode,
   output: OutputNode,
 };
 
@@ -98,8 +100,7 @@ export default function FlowCanvas() {
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
+      defaultViewport={{ x: 100, y: 100, zoom: 0.7 }}
       defaultEdgeOptions={{
         animated: true,
         style: { strokeDasharray: '5 5' },
@@ -126,7 +127,9 @@ export default function FlowCanvas() {
               return '#4f46e5';
             case 'skill':
               return '#06b6d4';
-            case 'mcp':
+            case 'command':
+              return '#f97316';
+            case 'hook':
               return '#ec4899';
             case 'output':
               return '#10b981';

@@ -1,4 +1,4 @@
-import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, McpNodeData, OutputNodeData } from '../types/nodes';
+import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, OutputNodeData } from '../types/nodes';
 import type { Edge } from '@xyflow/react';
 import { executeSubagent, isConfigured } from './aiService';
 
@@ -165,36 +165,63 @@ Skill executed successfully with the provided input.`;
   return skillDefinition;
 }
 
-// Execute MCP node
-async function executeMcpNode(
+// Execute Command node
+async function executeCommandNode(
   node: WorkflowNode,
   inputText: string,
   callbacks: ExecutionCallbacks
 ): Promise<string> {
-  const data = node.data as McpNodeData;
+  const data = node.data as CommandNodeData;
 
   callbacks.onNodeProgress(node.id, 50);
-  callbacks.onLog('info', `Connecting to MCP server: ${data.serverName || 'unnamed'}`, node.id);
+  callbacks.onLog('info', `Executing command: /${data.commandName || 'unnamed'}`, node.id);
 
-  // Generate MCP configuration
-  const mcpConfig = `# MCP Server Configuration
+  // Generate command execution result
+  const commandResult = `# Command Execution
 
-Server: ${data.serverName || 'mcp-server'}
-Type: ${data.serverType || 'stdio'}
+Command: /${data.commandName || 'command'}
+Path: ${data.commandPath || 'default'}
 
 ## Input
 ${inputText}
 
-## Configuration
-${JSON.stringify(data.serverConfig || {}, null, 2)}
-
 ## Status
-MCP server connection simulated. In production, this would connect to the actual server.`;
+Command executed successfully. In production, this would run the actual slash command.`;
 
   callbacks.onNodeProgress(node.id, 100);
-  callbacks.onLog('success', `MCP server ${data.serverName || 'unnamed'} connected`, node.id);
+  callbacks.onLog('success', `Command /${data.commandName || 'unnamed'} completed`, node.id);
 
-  return mcpConfig;
+  return commandResult;
+}
+
+// Execute Hook node
+async function executeHookNode(
+  node: WorkflowNode,
+  inputText: string,
+  callbacks: ExecutionCallbacks
+): Promise<string> {
+  const data = node.data as HookNodeData;
+
+  callbacks.onNodeProgress(node.id, 50);
+  callbacks.onLog('info', `Configuring hook: ${data.hookEvent || 'PreToolUse'}`, node.id);
+
+  // Generate hook configuration
+  const hookConfig = `# Hook Configuration
+
+Event: ${data.hookEvent || 'PreToolUse'}
+Matcher: ${data.hookMatcher || '*'}
+Command: ${data.hookCommand || 'echo "Hook executed"'}
+
+## Input
+${inputText}
+
+## Status
+Hook configured successfully. In production, this would set up the actual hook.`;
+
+  callbacks.onNodeProgress(node.id, 100);
+  callbacks.onLog('success', `Hook ${data.hookEvent || 'unnamed'} configured`, node.id);
+
+  return hookConfig;
 }
 
 // Execute output node
@@ -263,8 +290,11 @@ export async function executeWorkflow(
         case 'skill':
           result = await executeSkillNode(node, inputText, callbacks);
           break;
-        case 'mcp':
-          result = await executeMcpNode(node, inputText, callbacks);
+        case 'command':
+          result = await executeCommandNode(node, inputText, callbacks);
+          break;
+        case 'hook':
+          result = await executeHookNode(node, inputText, callbacks);
           break;
         case 'output':
           result = await executeOutputNode(node, inputText, callbacks);

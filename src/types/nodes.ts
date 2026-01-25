@@ -51,18 +51,23 @@ export interface SkillNodeData extends BaseNodeData {
   [key: string]: unknown;
 }
 
-// MCP node
-export type McpServerType = 'stdio' | 'sse' | 'http';
+// Command node
+export interface CommandNodeData extends BaseNodeData {
+  commandName?: string;
+  commandPath?: string;
+  mdContent?: string;
+  usedInputs?: string[];
+  [key: string]: unknown;
+}
 
-export interface McpNodeData extends BaseNodeData {
-  serverType: McpServerType;
-  serverName: string;
-  serverConfig: {
-    command?: string;
-    args?: string[];
-    url?: string;
-    env?: Record<string, string>;
-  };
+// Hook node
+export type HookEvent = 'PreToolUse' | 'PostToolUse' | 'Notification' | 'Stop';
+
+export interface HookNodeData extends BaseNodeData {
+  hookEvent?: HookEvent;
+  hookMatcher?: string;
+  hookCommand?: string;
+  mdContent?: string;
   usedInputs?: string[];
   [key: string]: unknown;
 }
@@ -84,17 +89,19 @@ export type WorkflowNodeData =
   | InputNodeData
   | SubagentNodeData
   | SkillNodeData
-  | McpNodeData
+  | CommandNodeData
+  | HookNodeData
   | OutputNodeData;
 
 // Typed nodes
 export type InputNode = Node<InputNodeData, 'input'>;
 export type SubagentNode = Node<SubagentNodeData, 'subagent'>;
 export type SkillNode = Node<SkillNodeData, 'skill'>;
-export type McpNode = Node<McpNodeData, 'mcp'>;
+export type CommandNode = Node<CommandNodeData, 'command'>;
+export type HookNode = Node<HookNodeData, 'hook'>;
 export type OutputNode = Node<OutputNodeData, 'output'>;
 
-export type WorkflowNode = InputNode | SubagentNode | SkillNode | McpNode | OutputNode;
+export type WorkflowNode = InputNode | SubagentNode | SkillNode | CommandNode | HookNode | OutputNode;
 export type WorkflowEdge = Edge;
 
 // Node type enum for type guards
@@ -102,7 +109,8 @@ export const NODE_TYPES = {
   INPUT: 'input',
   SUBAGENT: 'subagent',
   SKILL: 'skill',
-  MCP: 'mcp',
+  COMMAND: 'command',
+  HOOK: 'hook',
   OUTPUT: 'output',
 } as const;
 

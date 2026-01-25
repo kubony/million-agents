@@ -1,10 +1,10 @@
-import { MessageSquare, Sparkles, BarChart3, Zap, Plug } from 'lucide-react';
+import { MessageSquare, Sparkles, BarChart3, Zap, Terminal, Anchor } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { nanoid } from 'nanoid';
-import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, McpNodeData, OutputNodeData } from '../../types/nodes';
+import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, OutputNodeData } from '../../types/nodes';
 
 interface PaletteItem {
-  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
   label: string;
   icon: React.ReactNode;
   color: string;
@@ -34,9 +34,16 @@ const paletteItems: PaletteItem[] = [
     hoverColor: 'hover:bg-cyan-500/10',
   },
   {
-    type: 'mcp',
-    label: 'MCP',
-    icon: <Plug className="w-4 h-4" />,
+    type: 'command',
+    label: 'Command',
+    icon: <Terminal className="w-4 h-4" />,
+    color: 'text-orange-400',
+    hoverColor: 'hover:bg-orange-500/10',
+  },
+  {
+    type: 'hook',
+    label: 'Hook',
+    icon: <Anchor className="w-4 h-4" />,
     color: 'text-pink-400',
     hoverColor: 'hover:bg-pink-500/10',
   },
@@ -94,20 +101,31 @@ function createDefaultNodeData(type: PaletteItem['type']): WorkflowNode {
           usedInputs: [],
         } as SkillNodeData,
       };
-    case 'mcp':
+    case 'command':
       return {
         id,
-        type: 'mcp',
+        type: 'command',
         position,
         data: {
-          label: 'MCP Server',
-          description: 'Connect to external service...',
-          serverType: 'stdio',
-          serverName: '',
-          serverConfig: {},
+          label: 'Command',
+          description: 'Execute a slash command...',
+          commandName: '',
           status: 'idle',
           usedInputs: [],
-        } as McpNodeData,
+        } as CommandNodeData,
+      };
+    case 'hook':
+      return {
+        id,
+        type: 'hook',
+        position,
+        data: {
+          label: 'Hook',
+          description: 'Configure tool lifecycle hook...',
+          hookEvent: 'PreToolUse',
+          status: 'idle',
+          usedInputs: [],
+        } as HookNodeData,
       };
     case 'output':
       return {

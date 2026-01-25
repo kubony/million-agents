@@ -1,6 +1,6 @@
-import { Trash2, Sparkles, MessageSquare, Zap, Plug, BarChart3, Settings2 } from 'lucide-react';
+import { Trash2, Sparkles, MessageSquare, Zap, Terminal, Anchor, BarChart3, Settings2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
-import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, McpNodeData } from '../../types/nodes';
+import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, CommandNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 
 interface StepPanelProps {
@@ -22,8 +22,10 @@ function getNodeIcon(type: string | undefined) {
       return <Sparkles className="w-5 h-5 text-purple-400" />;
     case 'skill':
       return <Zap className="w-5 h-5 text-cyan-400" />;
-    case 'mcp':
-      return <Plug className="w-5 h-5 text-pink-400" />;
+    case 'command':
+      return <Terminal className="w-5 h-5 text-orange-400" />;
+    case 'hook':
+      return <Anchor className="w-5 h-5 text-pink-400" />;
     case 'output':
       return <BarChart3 className="w-5 h-5 text-emerald-400" />;
     default:
@@ -39,8 +41,10 @@ function getNodeTypeName(type: string | undefined) {
       return 'Sub Agent';
     case 'skill':
       return 'Skill';
-    case 'mcp':
-      return 'MCP Server';
+    case 'command':
+      return 'Command';
+    case 'hook':
+      return 'Hook';
     case 'output':
       return 'Output';
     default:
@@ -145,9 +149,16 @@ export default function StepPanel({ node }: StepPanelProps) {
           />
         )}
 
-        {node.type === 'mcp' && (
-          <McpSettings
-            data={node.data as McpNodeData}
+        {node.type === 'command' && (
+          <CommandSettings
+            data={node.data as CommandNodeData}
+            onUpdate={(data) => updateNode(node.id, data)}
+          />
+        )}
+
+        {node.type === 'hook' && (
+          <HookSettings
+            data={node.data as HookNodeData}
             onUpdate={(data) => updateNode(node.id, data)}
           />
         )}
@@ -357,32 +368,74 @@ function SkillSettings({
   );
 }
 
-// MCP-specific settings
-function McpSettings({
+// Command-specific settings
+function CommandSettings({
   data,
   onUpdate,
 }: {
-  data: McpNodeData;
-  onUpdate: (data: Partial<McpNodeData>) => void;
+  data: CommandNodeData;
+  onUpdate: (data: Partial<CommandNodeData>) => void;
 }) {
   return (
     <>
       <div>
         <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Server Type
+          Command Name
+        </label>
+        <input
+          type="text"
+          value={data.commandName || ''}
+          onChange={(e) => onUpdate({ commandName: e.target.value })}
+          placeholder="e.g., commit, review-pr"
+          className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+        <p className="mt-1 text-xs text-gray-500">Slash command to execute (without /)</p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+          Command Path (optional)
+        </label>
+        <input
+          type="text"
+          value={data.commandPath || ''}
+          onChange={(e) => onUpdate({ commandPath: e.target.value })}
+          placeholder="e.g., .claude/commands/my-command.md"
+          className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+      </div>
+    </>
+  );
+}
+
+// Hook-specific settings
+function HookSettings({
+  data,
+  onUpdate,
+}: {
+  data: HookNodeData;
+  onUpdate: (data: Partial<HookNodeData>) => void;
+}) {
+  const hookEvents = ['PreToolUse', 'PostToolUse', 'Notification', 'Stop'] as const;
+
+  return (
+    <>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+          Hook Event
         </label>
         <div className="grid grid-cols-2 gap-2">
-          {['stdio', 'sse'].map((type) => (
+          {hookEvents.map((event) => (
             <button
-              key={type}
-              onClick={() => onUpdate({ serverType: type as McpNodeData['serverType'] })}
+              key={event}
+              onClick={() => onUpdate({ hookEvent: event })}
               className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                data.serverType === type
+                data.hookEvent === event
                   ? 'bg-accent/20 border-accent text-white'
                   : 'bg-surface border-border text-gray-400 hover:border-gray-500'
               }`}
             >
-              {type.toUpperCase()}
+              {event}
             </button>
           ))}
         </div>
@@ -390,28 +443,30 @@ function McpSettings({
 
       <div>
         <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Server Name
+          Tool Matcher (optional)
         </label>
         <input
           type="text"
-          value={data.serverName || ''}
-          onChange={(e) => onUpdate({ serverName: e.target.value })}
-          placeholder="e.g., my-mcp-server"
+          value={data.hookMatcher || ''}
+          onChange={(e) => onUpdate({ hookMatcher: e.target.value })}
+          placeholder="e.g., Bash, Write, Edit"
           className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
         />
+        <p className="mt-1 text-xs text-gray-500">Filter by tool name pattern</p>
       </div>
 
       <div>
         <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Server Command (for stdio)
+          Hook Command
         </label>
         <input
           type="text"
-          value={(data.serverConfig as any)?.command || ''}
-          onChange={(e) => onUpdate({ serverConfig: { ...data.serverConfig, command: e.target.value } })}
-          placeholder="e.g., npx @anthropic/mcp-server"
+          value={data.hookCommand || ''}
+          onChange={(e) => onUpdate({ hookCommand: e.target.value })}
+          placeholder="e.g., npm run lint"
           className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
         />
+        <p className="mt-1 text-xs text-gray-500">Shell command to execute</p>
       </div>
     </>
   );

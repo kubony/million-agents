@@ -4,7 +4,8 @@ import type {
   InputNodeData,
   SubagentNodeData,
   SkillNodeData,
-  McpNodeData,
+  CommandNodeData,
+  HookNodeData,
   OutputNodeData,
 } from '../types/nodes';
 
@@ -39,7 +40,8 @@ function generateAgentMd(
   // Build agent frontmatter
   const subagentNodes = nodes.filter((n) => n.type === 'subagent');
   const skillNodes = nodes.filter((n) => n.type === 'skill');
-  const mcpNodes = nodes.filter((n) => n.type === 'mcp');
+  const commandNodes = nodes.filter((n) => n.type === 'command');
+  const hookNodes = nodes.filter((n) => n.type === 'hook');
 
   // Collect all tools
   const tools = new Set<string>();
@@ -75,13 +77,24 @@ function generateAgentMd(
     skillNames.forEach((name) => frontmatter.push(`  - ${name}`));
   }
 
-  // Add MCP servers
-  if (mcpNodes.length > 0) {
-    frontmatter.push(`mcp_servers:`);
-    mcpNodes.forEach((node) => {
-      const data = node.data as McpNodeData;
-      frontmatter.push(`  - name: ${data.serverName}`);
-      frontmatter.push(`    type: ${data.serverType}`);
+  // Add commands
+  if (commandNodes.length > 0) {
+    frontmatter.push(`commands:`);
+    commandNodes.forEach((node) => {
+      const data = node.data as CommandNodeData;
+      frontmatter.push(`  - name: ${data.commandName || node.data.label}`);
+    });
+  }
+
+  // Add hooks
+  if (hookNodes.length > 0) {
+    frontmatter.push(`hooks:`);
+    hookNodes.forEach((node) => {
+      const data = node.data as HookNodeData;
+      frontmatter.push(`  - event: ${data.hookEvent || 'PreToolUse'}`);
+      if (data.hookMatcher) {
+        frontmatter.push(`    matcher: ${data.hookMatcher}`);
+      }
     });
   }
 
