@@ -3,7 +3,9 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
@@ -12,17 +14,33 @@ import { executeInTerminal, getClaudeCommand } from './services/terminalService'
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
 const httpServer = createServer(app);
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+    origin: isProduction
+      ? undefined
+      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
     methods: ['GET', 'POST'],
   },
 });
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static files in production
+if (isProduction) {
+  const clientDistPath = join(__dirname, '..', 'dist', 'client');
+  if (existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+  }
+}
 
 const claudeService = new ClaudeService();
 
@@ -219,6 +237,14 @@ io.on('connection', (socket) => {
     console.log('Client disconnected:', socket.id);
   });
 });
+
+// SPA fallback - serve index.html for all non-API routes in production
+if (isProduction) {
+  const clientDistPath = join(__dirname, '..', 'dist', 'client');
+  app.get('/{*path}', (req, res) => {
+    res.sendFile(join(clientDistPath, 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 
