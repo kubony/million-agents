@@ -9,7 +9,7 @@ import { existsSync } from 'fs';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
-import { skillGeneratorService } from './services/skillGeneratorService';
+import { skillGeneratorService, type SkillProgressEvent } from './services/skillGeneratorService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
@@ -308,6 +308,45 @@ io.on('connection', (socket) => {
   socket.on('execute:cancel', () => {
     claudeService.cancelExecution();
     socket.emit('workflow:cancelled');
+  });
+
+  // Generate skill with real-time progress
+  socket.on('generate:skill', async (data: {
+    prompt: string;
+    apiMode?: 'proxy' | 'direct';
+    apiKey?: string;
+    proxyUrl?: string;
+  }) => {
+    console.log('Generating skill via Socket.IO:', data.prompt);
+
+    try {
+      const result = await skillGeneratorService.generate(
+        data.prompt,
+        {
+          apiMode: data.apiMode || 'proxy',
+          apiKey: data.apiKey,
+          proxyUrl: data.proxyUrl,
+        },
+        // Progress callback
+        (event: SkillProgressEvent) => {
+          socket.emit('skill:progress', event);
+        }
+      );
+
+      if (result.success) {
+        socket.emit('skill:completed', {
+          skill: result.skill,
+          savedPath: result.savedPath,
+        });
+      } else {
+        socket.emit('skill:error', {
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      socket.emit('skill:error', { error: errorMessage });
+    }
   });
 
   socket.on('disconnect', () => {

@@ -21,6 +21,23 @@ export interface SkillGenerationResult {
   error?: string;
 }
 
+export type SkillProgressStep =
+  | 'started'
+  | 'analyzing'
+  | 'designing'
+  | 'generating'
+  | 'saving'
+  | 'completed'
+  | 'error';
+
+export interface SkillProgressEvent {
+  step: SkillProgressStep;
+  message: string;
+  detail?: string;
+}
+
+export type SkillProgressCallback = (event: SkillProgressEvent) => void;
+
 const SYSTEM_PROMPT = `You are a Claude Code skill generator. You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no explanations - just pure JSON.
 
 Your response must follow this exact JSON schema:
@@ -106,14 +123,44 @@ export class SkillGeneratorService {
     return new Anthropic({ apiKey: envApiKey });
   }
 
-  async generate(prompt: string, settings?: ApiSettings): Promise<SkillGenerationResult> {
+  async generate(
+    prompt: string,
+    settings?: ApiSettings,
+    onProgress?: SkillProgressCallback
+  ): Promise<SkillGenerationResult> {
+    const progress = onProgress || (() => {});
+
+    progress({
+      step: 'started',
+      message: '✨ 스킬 생성을 시작합니다',
+      detail: `요청: "${prompt.slice(0, 50)}${prompt.length > 50 ? '...' : ''}"`,
+    });
+
     const client = this.getClient(settings);
+
+    progress({
+      step: 'analyzing',
+      message: '🔍 요청을 분석하고 있어요',
+      detail: '어떤 스킬이 필요한지 파악 중...',
+    });
 
     const userPrompt = `Create a skill for: "${prompt}"
 
 Generate complete, working code. Respond with JSON only.`;
 
     try {
+      progress({
+        step: 'designing',
+        message: '📝 스킬 구조를 설계하고 있어요',
+        detail: 'AI가 최적의 스킬 구조를 결정 중...',
+      });
+
+      progress({
+        step: 'generating',
+        message: '⚙️ 코드를 생성하고 있어요',
+        detail: 'Python 스크립트와 설정 파일 작성 중...',
+      });
+
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
@@ -132,6 +179,10 @@ Generate complete, working code. Respond with JSON only.`;
       }
 
       if (!responseText) {
+        progress({
+          step: 'error',
+          message: '❌ AI 응답을 받지 못했습니다',
+        });
         return { success: false, error: 'AI 응답을 받지 못했습니다.' };
       }
 
@@ -143,12 +194,29 @@ Generate complete, working code. Respond with JSON only.`;
         skill = JSON.parse(fullJson);
       } catch {
         console.error('Failed to parse skill response:', fullJson.slice(0, 500));
+        progress({
+          step: 'error',
+          message: '❌ AI 응답을 파싱할 수 없습니다',
+          detail: '다시 시도해주세요',
+        });
         return { success: false, error: 'AI 응답을 파싱할 수 없습니다. 다시 시도해주세요.' };
       }
+
+      progress({
+        step: 'saving',
+        message: '💾 파일을 저장하고 있어요',
+        detail: `${skill.files.length}개 파일 저장 중...`,
+      });
 
       // 파일 저장
       const skillPath = path.join(this.projectRoot, '.claude', 'skills', skill.skillId);
       await this.saveSkillFiles(skillPath, skill.files);
+
+      progress({
+        step: 'completed',
+        message: '✅ 스킬이 생성되었습니다!',
+        detail: `${skill.skillName} → ${skillPath}`,
+      });
 
       return {
         success: true,
@@ -158,6 +226,11 @@ Generate complete, working code. Respond with JSON only.`;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Skill generation error:', errorMessage);
+      progress({
+        step: 'error',
+        message: '❌ 스킬 생성에 실패했습니다',
+        detail: errorMessage,
+      });
       return { success: false, error: errorMessage };
     }
   }

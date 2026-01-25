@@ -1,8 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Send, Loader2, CheckCircle } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { usePanelStore } from '../../stores/panelStore';
+import { useExecutionStore } from '../../stores/executionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { generateWorkflowWithAI } from '../../services/workflowGenerator';
-import { generateSkill, isSkillGenerationRequest, type SkillGenerationResult } from '../../services/skillGenerator';
+import { isSkillGenerationRequest } from '../../services/skillGenerator';
+import {
+  socketService,
+  type SkillProgressEvent,
+  type SkillCompletedData,
+  type SkillErrorData,
+} from '../../services/socketService';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
@@ -11,6 +20,42 @@ export default function PromptBar() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generatingType, setGeneratingType] = useState<'skill' | 'workflow'>('workflow');
   const { loadWorkflow } = useWorkflowStore();
+  const { openConsolePanel } = usePanelStore();
+  const { addLog, clearLogs } = useExecutionStore();
+  const { apiMode, apiKey, proxyUrl } = useSettingsStore();
+
+  // Socket.IO 이벤트 핸들러
+  const handleSkillProgress = useCallback((event: SkillProgressEvent) => {
+    // 진행 상황을 로그에 추가
+    const level = event.step === 'error' ? 'error' :
+                  event.step === 'completed' ? 'success' : 'info';
+    addLog(level, event.message, undefined, event.detail);
+  }, [addLog]);
+
+  const handleSkillCompleted = useCallback((data: SkillCompletedData) => {
+    setIsGenerating(false);
+    setSuccessMessage(`스킬 "${data.skill.skillName}"이 ${data.savedPath}에 저장되었습니다!`);
+    setPrompt('');
+    setTimeout(() => setSuccessMessage(null), 5000);
+  }, []);
+
+  const handleSkillError = useCallback((data: SkillErrorData) => {
+    setIsGenerating(false);
+    setError(data.error);
+  }, []);
+
+  // Socket.IO 이벤트 리스너 등록
+  useEffect(() => {
+    socketService.on<SkillProgressEvent>('skill:progress', handleSkillProgress);
+    socketService.on<SkillCompletedData>('skill:completed', handleSkillCompleted);
+    socketService.on<SkillErrorData>('skill:error', handleSkillError);
+
+    return () => {
+      socketService.off<SkillProgressEvent>('skill:progress', handleSkillProgress);
+      socketService.off<SkillCompletedData>('skill:completed', handleSkillCompleted);
+      socketService.off<SkillErrorData>('skill:error', handleSkillError);
+    };
+  }, [handleSkillProgress, handleSkillCompleted, handleSkillError]);
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -25,18 +70,17 @@ export default function PromptBar() {
 
     try {
       if (isSkillRequest) {
-        // 스킬 생성
-        const result: SkillGenerationResult = await generateSkill(prompt);
+        // 스킬 생성 - Socket.IO 사용
+        clearLogs();
+        openConsolePanel();
 
-        if (result.success && result.skill) {
-          setSuccessMessage(`스킬 "${result.skill.skillName}"이 ${result.savedPath}에 저장되었습니다!`);
-          setPrompt('');
-
-          // 3초 후 메시지 숨김
-          setTimeout(() => setSuccessMessage(null), 5000);
-        } else {
-          throw new Error(result.error || '스킬 생성에 실패했습니다.');
-        }
+        socketService.generateSkill({
+          prompt,
+          apiMode,
+          apiKey: apiMode === 'direct' ? apiKey : undefined,
+          proxyUrl: apiMode === 'proxy' ? proxyUrl : undefined,
+        });
+        // 결과는 Socket.IO 이벤트로 처리됨
       } else {
         // 워크플로우 생성
         const { workflow, workflowName } = await generateWorkflowWithAI(prompt);
@@ -48,12 +92,12 @@ export default function PromptBar() {
         });
 
         setPrompt('');
+        setIsGenerating(false);
       }
     } catch (err) {
       console.error('Generation failed:', err);
       const message = err instanceof Error ? err.message : '생성에 실패했습니다.';
       setError(message);
-    } finally {
       setIsGenerating(false);
     }
   };
