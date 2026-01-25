@@ -107,10 +107,10 @@ export const useWorkflowStore = create<WorkflowState>()(
           const loadedIds = new Set(loadedNodes.map(n => n.id));
 
           // 기존 노드 중:
-          // - config에서 로드된 노드 (ID가 skill-, subagent-, command-, hook- 으로 시작)는
+          // - config에서 로드된 노드 (ID가 skill-, agent-, command-, hook- 으로 시작)는
           //   파일시스템에 없으면 제거
           // - 사용자가 직접 만든 노드 (nanoid로 생성된 ID)는 유지
-          const configPrefixes = ['skill-', 'subagent-', 'command-', 'hook-'];
+          const configPrefixes = ['skill-', 'agent-', 'command-', 'hook-'];
           const isConfigNode = (id: string) => configPrefixes.some(p => id.startsWith(p));
 
           const existingNodes = state.nodes.filter(n => {
