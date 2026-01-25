@@ -12,7 +12,7 @@ interface LoadedSkill {
 
 interface LoadedSubagent {
   id: string;
-  type: 'subagent';
+  type: 'agent';
   label: string;
   description: string;
   tools: string[];
@@ -44,7 +44,7 @@ export type LoadedNode = LoadedSkill | LoadedSubagent | LoadedCommand | LoadedHo
 
 export interface ClaudeConfig {
   skills: LoadedSkill[];
-  subagents: LoadedSubagent[];
+  agents: LoadedSubagent[];
   commands: LoadedCommand[];
   hooks: LoadedHook[];
 }
@@ -60,14 +60,14 @@ export class ConfigLoaderService {
    * .claude/ 디렉토리에서 모든 설정 로드
    */
   async loadAll(): Promise<ClaudeConfig> {
-    const [skills, subagents, commands, hooks] = await Promise.all([
+    const [skills, agents, commands, hooks] = await Promise.all([
       this.loadSkills(),
       this.loadSubagents(),
       this.loadCommands(),
       this.loadHooks(),
     ]);
 
-    return { skills, subagents, commands, hooks };
+    return { skills, agents, commands, hooks };
   }
 
   /**
@@ -112,7 +112,7 @@ export class ConfigLoaderService {
    */
   async loadSubagents(): Promise<LoadedSubagent[]> {
     const agentsDir = path.join(this.projectRoot, '.claude', 'agents');
-    const subagents: LoadedSubagent[] = [];
+    const agents: LoadedSubagent[] = [];
 
     try {
       const entries = await fs.readdir(agentsDir, { withFileTypes: true });
@@ -125,9 +125,9 @@ export class ConfigLoaderService {
             const parsed = this.parseFrontmatter(content);
             const agentName = entry.name.replace('.md', '');
 
-            subagents.push({
-              id: `subagent-${agentName}`,
-              type: 'subagent',
+            agents.push({
+              id: `agent-${agentName}`,
+              type: 'agent',
               label: parsed.frontmatter.name || agentName,
               description: parsed.frontmatter.description || '',
               tools: this.parseList(parsed.frontmatter.tools),
@@ -144,7 +144,7 @@ export class ConfigLoaderService {
       // agents 디렉토리가 없으면 빈 배열 반환
     }
 
-    return subagents;
+    return agents;
   }
 
   /**

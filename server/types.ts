@@ -74,7 +74,7 @@ export type WorkflowNodeData =
 // Node structure for execution
 export interface ExecutionNode {
   id: string;
-  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  type: 'input' | 'agent' | 'skill' | 'mcp' | 'output';
   data: WorkflowNodeData;
   position: { x: number; y: number };
 }

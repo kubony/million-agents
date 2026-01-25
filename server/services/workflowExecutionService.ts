@@ -112,7 +112,7 @@ export class WorkflowExecutionService {
       case 'input':
         return this.executeInputNode(node, context.inputs);
 
-      case 'subagent':
+      case 'agent':
         return this.executeSubagentNode(node, previousResults, onProgress, onLog);
 
       case 'skill':
@@ -161,7 +161,7 @@ export class WorkflowExecutionService {
     onLog?.('info', `claude -c 실행 중: ${data.label} (${data.role})`);
 
     // 프롬프트 생성
-    const prompt = buildNodePrompt('subagent', data as unknown as Record<string, unknown>, previousResults);
+    const prompt = buildNodePrompt('agent', data as unknown as Record<string, unknown>, previousResults);
 
     try {
       onProgress?.({ nodeId: node.id, status: 'running', progress: 40 });

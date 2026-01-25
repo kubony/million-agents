@@ -1,4 +1,4 @@
-import type { WorkflowNode, SkillNodeData, SubagentNodeData, CommandNodeData, HookNodeData } from '../types/nodes';
+import type { WorkflowNode, SkillNodeData, AgentNodeData, HookNodeData } from '../types/nodes';
 
 interface LoadedSkill {
   id: string;
@@ -9,24 +9,15 @@ interface LoadedSkill {
   skillPath: string;
 }
 
-interface LoadedSubagent {
+interface LoadedAgent {
   id: string;
-  type: 'subagent';
+  type: 'agent';
   label: string;
   description: string;
   tools: string[];
   model?: string;
   skills: string[];
   systemPrompt: string;
-}
-
-interface LoadedCommand {
-  id: string;
-  type: 'command';
-  label: string;
-  description: string;
-  commandName: string;
-  commandContent: string;
 }
 
 interface LoadedHook {
@@ -41,8 +32,7 @@ interface LoadedHook {
 
 interface ClaudeConfig {
   skills: LoadedSkill[];
-  subagents: LoadedSubagent[];
-  commands: LoadedCommand[];
+  agents: LoadedAgent[];
   hooks: LoadedHook[];
 }
 
@@ -91,41 +81,23 @@ function convertToNodes(config: ClaudeConfig): WorkflowNode[] {
     xOffset += xGap;
   }
 
-  // 서브에이전트 노드
-  for (const agent of config.subagents) {
+  // 에이전트 노드
+  for (const agent of config.agents) {
     nodes.push({
       id: agent.id,
-      type: 'subagent',
+      type: 'agent',
       position: { x: 100 + xOffset, y: yBase },
       data: {
         label: agent.label,
         description: agent.description,
         role: 'custom',
         tools: agent.tools,
-        model: agent.model as SubagentNodeData['model'],
+        model: agent.model as AgentNodeData['model'],
         skills: agent.skills,
         systemPrompt: agent.systemPrompt,
         status: 'idle',
         usedInputs: [],
-      } as SubagentNodeData,
-    });
-    xOffset += xGap;
-  }
-
-  // 커맨드 노드
-  for (const command of config.commands) {
-    nodes.push({
-      id: command.id,
-      type: 'command',
-      position: { x: 100 + xOffset, y: yBase },
-      data: {
-        label: command.label,
-        description: command.description,
-        commandName: command.commandName,
-        commandContent: command.commandContent,
-        status: 'idle',
-        usedInputs: [],
-      } as CommandNodeData,
+      } as AgentNodeData,
     });
     xOffset += xGap;
   }

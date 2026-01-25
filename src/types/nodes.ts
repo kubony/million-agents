@@ -25,10 +25,10 @@ export interface InputNodeData extends BaseNodeData {
   [key: string]: unknown;
 }
 
-// Subagent node (Generate in Opal terms)
+// Agent node (Generate in Opal terms)
 export type AgentRole = 'researcher' | 'writer' | 'analyst' | 'coder' | 'custom';
 
-export interface SubagentNodeData extends BaseNodeData {
+export interface AgentNodeData extends BaseNodeData {
   role: AgentRole;
   tools: string[];
   mdContent?: string;
@@ -48,15 +48,6 @@ export interface SkillNodeData extends BaseNodeData {
   skillPath?: string; // 생성된 스킬의 파일 경로
   mdContent?: string;
   skillContent?: string; // AI가 생성한 커스텀 스킬 SKILL.md 내용
-  usedInputs?: string[];
-  [key: string]: unknown;
-}
-
-// Command node
-export interface CommandNodeData extends BaseNodeData {
-  commandName?: string;
-  commandPath?: string;
-  mdContent?: string;
   usedInputs?: string[];
   [key: string]: unknown;
 }
@@ -88,29 +79,26 @@ export interface OutputNodeData extends BaseNodeData {
 // Node type union
 export type WorkflowNodeData =
   | InputNodeData
-  | SubagentNodeData
+  | AgentNodeData
   | SkillNodeData
-  | CommandNodeData
   | HookNodeData
   | OutputNodeData;
 
 // Typed nodes
 export type InputNode = Node<InputNodeData, 'input'>;
-export type SubagentNode = Node<SubagentNodeData, 'subagent'>;
+export type AgentNode = Node<AgentNodeData, 'agent'>;
 export type SkillNode = Node<SkillNodeData, 'skill'>;
-export type CommandNode = Node<CommandNodeData, 'command'>;
 export type HookNode = Node<HookNodeData, 'hook'>;
 export type OutputNode = Node<OutputNodeData, 'output'>;
 
-export type WorkflowNode = InputNode | SubagentNode | SkillNode | CommandNode | HookNode | OutputNode;
+export type WorkflowNode = InputNode | AgentNode | SkillNode | HookNode | OutputNode;
 export type WorkflowEdge = Edge;
 
 // Node type enum for type guards
 export const NODE_TYPES = {
   INPUT: 'input',
-  SUBAGENT: 'subagent',
+  AGENT: 'agent',
   SKILL: 'skill',
-  COMMAND: 'command',
   HOOK: 'hook',
   OUTPUT: 'output',
 } as const;
@@ -132,3 +120,9 @@ export const AVAILABLE_TOOLS = [
 ] as const;
 
 export type AvailableTool = typeof AVAILABLE_TOOLS[number];
+
+// Legacy type aliases for backward compatibility
+/** @deprecated Use AgentNodeData instead */
+export type SubagentNodeData = AgentNodeData;
+/** @deprecated Use AgentNode instead */
+export type SubagentNode = AgentNode;

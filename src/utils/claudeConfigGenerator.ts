@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, InputNodeData, OutputNodeData } from '../types/nodes';
+import type { WorkflowNode, WorkflowEdge, AgentNodeData, SkillNodeData, HookNodeData, InputNodeData, OutputNodeData } from '../types/nodes';
 import type { ClaudeConfigExport, SkillConfig, CommandConfig, AgentConfig, McpSettingsUpdate, SaveLocation } from '../types/save';
 
 /**
@@ -47,7 +47,7 @@ function generateSkillConfigs(nodes: WorkflowNode[], basePath: string): SkillCon
  * Generates agent configurations from subagent nodes
  */
 function generateAgentConfigs(nodes: WorkflowNode[], basePath: string): AgentConfig[] {
-  const subagentNodes = nodes.filter((n): n is WorkflowNode & { data: SubagentNodeData } => n.type === 'subagent');
+  const subagentNodes = nodes.filter((n): n is WorkflowNode & { data: AgentNodeData } => n.type === 'agent');
 
   return subagentNodes.map((node) => {
     const data = node.data;
@@ -124,7 +124,7 @@ function generateSkillContent(data: SkillNodeData): string {
 /**
  * Generates agent.md content for a subagent node
  */
-function generateAgentContent(data: SubagentNodeData): string {
+function generateAgentContent(data: AgentNodeData): string {
   const name = sanitizeName(data.label);
   const description = data.description || data.label;
   const tools = data.tools.length > 0 ? data.tools.join(', ') : 'Read, Write, Edit';
@@ -209,8 +209,8 @@ function generateCommandContent(
       lines.push(`   ${node.data.description}`);
     }
 
-    if (node.type === 'subagent') {
-      const data = node.data as SubagentNodeData;
+    if (node.type === 'agent') {
+      const data = node.data as AgentNodeData;
       if (data.systemPrompt) {
         lines.push(`   - Prompt: ${data.systemPrompt.substring(0, 100)}${data.systemPrompt.length > 100 ? '...' : ''}`);
       }
@@ -224,11 +224,6 @@ function generateCommandContent(
       if (data.skillId) {
         lines.push(`   - Invoke skill: ${data.skillId}`);
       }
-    }
-
-    if (node.type === 'command') {
-      const data = node.data as CommandNodeData;
-      lines.push(`   - Command: /${data.commandName}`);
     }
 
     if (node.type === 'hook') {

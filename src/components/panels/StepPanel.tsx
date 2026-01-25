@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Trash2, Sparkles, MessageSquare, Zap, Terminal, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle } from 'lucide-react';
+import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { syncNode, deleteNode } from '../../services/syncService';
-import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, CommandNodeData, HookNodeData } from '../../types/nodes';
+import type { WorkflowNode, AgentNodeData, InputNodeData, SkillNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 import { AVAILABLE_SKILLS } from '../../data/availableSkills';
 
@@ -21,12 +21,10 @@ function getNodeIcon(type: string | undefined) {
   switch (type) {
     case 'input':
       return <MessageSquare className="w-5 h-5 text-yellow-400" />;
-    case 'subagent':
+    case 'agent':
       return <Sparkles className="w-5 h-5 text-purple-400" />;
     case 'skill':
       return <Zap className="w-5 h-5 text-cyan-400" />;
-    case 'command':
-      return <Terminal className="w-5 h-5 text-orange-400" />;
     case 'hook':
       return <Anchor className="w-5 h-5 text-pink-400" />;
     case 'output':
@@ -40,12 +38,10 @@ function getNodeTypeName(type: string | undefined) {
   switch (type) {
     case 'input':
       return 'User Input';
-    case 'subagent':
-      return 'Sub Agent';
+    case 'agent':
+      return 'Agent';
     case 'skill':
       return 'Skill';
-    case 'command':
-      return 'Command';
     case 'hook':
       return 'Hook';
     case 'output':
@@ -163,13 +159,13 @@ export default function StepPanel({ node }: StepPanelProps) {
         {/* Description / Prompt */}
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-            {node.type === 'subagent' ? 'Prompt' : 'Description'}
+            {node.type === 'agent' ? 'Prompt' : 'Description'}
           </label>
           <textarea
             value={node.data.description || ''}
             onChange={(e) => handleDescriptionChange(e.target.value)}
             rows={4}
-            placeholder={node.type === 'subagent' ? 'Enter instructions for this agent...' : 'Describe what this step does...'}
+            placeholder={node.type === 'agent' ? 'Enter instructions for this agent...' : 'Describe what this step does...'}
             className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all resize-none"
           />
         </div>
@@ -182,9 +178,9 @@ export default function StepPanel({ node }: StepPanelProps) {
           />
         )}
 
-        {node.type === 'subagent' && (
-          <SubagentSettings
-            data={node.data as SubagentNodeData}
+        {node.type === 'agent' && (
+          <AgentSettings
+            data={node.data as AgentNodeData}
             onUpdate={(data) => updateNode(node.id, data)}
           />
         )}
@@ -192,13 +188,6 @@ export default function StepPanel({ node }: StepPanelProps) {
         {node.type === 'skill' && (
           <SkillSettings
             data={node.data as SkillNodeData}
-            onUpdate={(data) => updateNode(node.id, data)}
-          />
-        )}
-
-        {node.type === 'command' && (
-          <CommandSettings
-            data={node.data as CommandNodeData}
             onUpdate={(data) => updateNode(node.id, data)}
           />
         )}
@@ -302,13 +291,13 @@ function InputSettings({
   );
 }
 
-// Subagent-specific settings
-function SubagentSettings({
+// Agent-specific settings
+function AgentSettings({
   data,
   onUpdate,
 }: {
-  data: SubagentNodeData;
-  onUpdate: (data: Partial<SubagentNodeData>) => void;
+  data: AgentNodeData;
+  onUpdate: (data: Partial<AgentNodeData>) => void;
 }) {
   return (
     <>
@@ -321,7 +310,7 @@ function SubagentSettings({
           {MODEL_OPTIONS.map((model) => (
             <button
               key={model.id}
-              onClick={() => onUpdate({ model: model.id as SubagentNodeData['model'] })}
+              onClick={() => onUpdate({ model: model.id as AgentNodeData['model'] })}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                 data.model === model.id
                   ? 'bg-accent/20 border-accent'
@@ -660,46 +649,6 @@ function SkillSettings({
             </button>
           ))}
         </div>
-      </div>
-    </>
-  );
-}
-
-// Command-specific settings
-function CommandSettings({
-  data,
-  onUpdate,
-}: {
-  data: CommandNodeData;
-  onUpdate: (data: Partial<CommandNodeData>) => void;
-}) {
-  return (
-    <>
-      <div>
-        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Command Name
-        </label>
-        <input
-          type="text"
-          value={data.commandName || ''}
-          onChange={(e) => onUpdate({ commandName: e.target.value })}
-          placeholder="e.g., commit, review-pr"
-          className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
-        />
-        <p className="mt-1 text-xs text-gray-500">Slash command to execute (without /)</p>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-          Command Path (optional)
-        </label>
-        <input
-          type="text"
-          value={data.commandPath || ''}
-          onChange={(e) => onUpdate({ commandPath: e.target.value })}
-          placeholder="e.g., .claude/commands/my-command.md"
-          className="w-full px-3 py-2.5 bg-surface border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-accent"
-        />
       </div>
     </>
   );

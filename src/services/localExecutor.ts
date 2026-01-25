@@ -1,4 +1,4 @@
-import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, OutputNodeData } from '../types/nodes';
+import type { WorkflowNode, InputNodeData, AgentNodeData, SkillNodeData, HookNodeData, OutputNodeData } from '../types/nodes';
 import type { Edge } from '@xyflow/react';
 import { executeSubagent, isConfigured } from './aiService';
 
@@ -97,13 +97,13 @@ async function executeInputNode(
   return value;
 }
 
-// Execute subagent node
-async function executeSubagentNode(
+// Execute agent node
+async function executeAgentNode(
   node: WorkflowNode,
   inputText: string,
   callbacks: ExecutionCallbacks
 ): Promise<string> {
-  const data = node.data as SubagentNodeData;
+  const data = node.data as AgentNodeData;
 
   if (!isConfigured()) {
     throw new Error('API key not configured. Please set your Claude API key.');
@@ -129,7 +129,7 @@ async function executeSubagentNode(
 
     return result;
   } catch (error) {
-    throw new Error(`Subagent execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Agent execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -147,7 +147,7 @@ async function executeSkillNode(
   // Generate skill definition
   const skillDefinition = `# Skill: ${data.label}
 
-Category: ${data.category || 'general'}
+Category: ${data.skillCategory || 'general'}
 Skill ID: ${data.skillId || 'custom-skill'}
 
 ## Description
@@ -163,35 +163,6 @@ Skill executed successfully with the provided input.`;
   callbacks.onLog('success', `Skill ${data.label} completed`, node.id);
 
   return skillDefinition;
-}
-
-// Execute Command node
-async function executeCommandNode(
-  node: WorkflowNode,
-  inputText: string,
-  callbacks: ExecutionCallbacks
-): Promise<string> {
-  const data = node.data as CommandNodeData;
-
-  callbacks.onNodeProgress(node.id, 50);
-  callbacks.onLog('info', `Executing command: /${data.commandName || 'unnamed'}`, node.id);
-
-  // Generate command execution result
-  const commandResult = `# Command Execution
-
-Command: /${data.commandName || 'command'}
-Path: ${data.commandPath || 'default'}
-
-## Input
-${inputText}
-
-## Status
-Command executed successfully. In production, this would run the actual slash command.`;
-
-  callbacks.onNodeProgress(node.id, 100);
-  callbacks.onLog('success', `Command /${data.commandName || 'unnamed'} completed`, node.id);
-
-  return commandResult;
 }
 
 // Execute Hook node
@@ -284,14 +255,11 @@ export async function executeWorkflow(
         case 'input':
           result = await executeInputNode(node, callbacks);
           break;
-        case 'subagent':
-          result = await executeSubagentNode(node, inputText, callbacks);
+        case 'agent':
+          result = await executeAgentNode(node, inputText, callbacks);
           break;
         case 'skill':
           result = await executeSkillNode(node, inputText, callbacks);
-          break;
-        case 'command':
-          result = await executeCommandNode(node, inputText, callbacks);
           break;
         case 'hook':
           result = await executeHookNode(node, inputText, callbacks);

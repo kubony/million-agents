@@ -2,9 +2,8 @@ import type {
   WorkflowNode,
   WorkflowEdge,
   InputNodeData,
-  SubagentNodeData,
+  AgentNodeData,
   SkillNodeData,
-  CommandNodeData,
   HookNodeData,
   OutputNodeData,
 } from '../types/nodes';
@@ -38,22 +37,21 @@ function generateAgentMd(
   edges: WorkflowEdge[]
 ): string {
   // Build agent frontmatter
-  const subagentNodes = nodes.filter((n) => n.type === 'subagent');
+  const agentNodes = nodes.filter((n) => n.type === 'agent');
   const skillNodes = nodes.filter((n) => n.type === 'skill');
-  const commandNodes = nodes.filter((n) => n.type === 'command');
   const hookNodes = nodes.filter((n) => n.type === 'hook');
 
   // Collect all tools
   const tools = new Set<string>();
-  subagentNodes.forEach((node) => {
-    const data = node.data as SubagentNodeData;
+  agentNodes.forEach((node) => {
+    const data = node.data as AgentNodeData;
     data.tools?.forEach((tool) => tools.add(tool));
   });
 
   // Determine model (use the most powerful one specified)
   let model: 'sonnet' | 'opus' | 'haiku' = 'sonnet';
-  subagentNodes.forEach((node) => {
-    const data = node.data as SubagentNodeData;
+  agentNodes.forEach((node) => {
+    const data = node.data as AgentNodeData;
     if (data.model === 'opus') model = 'opus';
     else if (data.model === 'haiku' && model !== 'opus') model = 'haiku';
   });
@@ -67,23 +65,14 @@ function generateAgentMd(
     `model: ${model}`,
   ];
 
-  // Add subagents if there are skill nodes
+  // Add skills
   if (skillNodes.length > 0) {
     const skillNames = skillNodes.map((n) => {
       const data = n.data as SkillNodeData;
       return data.skillId || n.data.label.toLowerCase().replace(/\s+/g, '-');
     });
-    frontmatter.push(`subagents:`);
+    frontmatter.push(`skills:`);
     skillNames.forEach((name) => frontmatter.push(`  - ${name}`));
-  }
-
-  // Add commands
-  if (commandNodes.length > 0) {
-    frontmatter.push(`commands:`);
-    commandNodes.forEach((node) => {
-      const data = node.data as CommandNodeData;
-      frontmatter.push(`  - name: ${data.commandName || node.data.label}`);
-    });
   }
 
   // Add hooks
@@ -135,8 +124,8 @@ function generateAgentMd(
       instructions.push(`   ${node.data.description}`);
     }
 
-    if (node.type === 'subagent') {
-      const data = node.data as SubagentNodeData;
+    if (node.type === 'agent') {
+      const data = node.data as AgentNodeData;
       if (data.systemPrompt) {
         instructions.push(`   - System: ${data.systemPrompt.substring(0, 100)}...`);
       }

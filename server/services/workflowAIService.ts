@@ -16,14 +16,14 @@ export interface AIWorkflowResult {
 }
 
 export interface AIGeneratedNode {
-  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  type: 'input' | 'agent' | 'skill' | 'mcp' | 'output';
   label: string;
   description: string;
   config: {
     // input
     inputType?: 'text' | 'file' | 'select';
     placeholder?: string;
-    // subagent
+    // agent
     role?: string;
     tools?: string[];
     model?: string;
@@ -62,7 +62,7 @@ const SYSTEM_PROMPT = `당신은 Claude Code 워크플로우 설계 전문가입
 ## 사용 가능한 공식 스킬
 ${AVAILABLE_SKILLS.map(s => `- ${s.id}: ${s.description}`).join('\n')}
 
-## 사용 가능한 도구 (subagent의 tools에 사용)
+## 사용 가능한 도구 (agent의 tools에 사용)
 ${AVAILABLE_TOOLS.join(', ')}
 
 ## 응답 형식 (JSON)
@@ -82,7 +82,7 @@ ${AVAILABLE_TOOLS.join(', ')}
       }
     },
     {
-      "type": "subagent",
+      "type": "agent",
       "label": "에이전트 이름",
       "description": "에이전트 역할 설명",
       "config": {
@@ -130,7 +130,7 @@ ${AVAILABLE_TOOLS.join(', ')}
 1. 항상 input 노드로 시작하고 output 노드로 종료
 2. 기존 공식 스킬로 가능하면 official 스킬 사용
 3. 새로운 기능이 필요하면 custom 스킬 생성 (skillContent에 SKILL.md 형식)
-4. subagent는 복잡한 추론이나 다단계 작업에 사용
+4. agent는 복잡한 추론이나 다단계 작업에 사용
 5. edges의 from/to는 nodes 배열의 인덱스 (0부터 시작)
 6. 순차적으로 연결되지 않아도 됨 (병렬 처리, 합류 가능)
 7. systemPrompt는 구체적이고 실행 가능한 지시사항으로 작성
@@ -155,8 +155,8 @@ ${AVAILABLE_TOOLS.join(', ')}
   "description": "데이터를 분석하고 보고서를 작성하는 워크플로우",
   "nodes": [
     { "type": "input", "label": "데이터 파일", "description": "분석할 데이터 파일", "config": { "inputType": "file" } },
-    { "type": "subagent", "label": "데이터 분석가", "description": "데이터를 분석하고 인사이트 도출", "config": { "role": "analyst", "tools": ["Read", "Grep", "Glob"], "model": "sonnet", "systemPrompt": "주어진 데이터를 분석하여 핵심 인사이트를 도출하세요. 통계적 요약, 트렌드, 이상치를 파악하세요." } },
-    { "type": "subagent", "label": "보고서 작성자", "description": "분석 결과로 보고서 작성", "config": { "role": "writer", "tools": ["Read", "Write"], "model": "opus", "systemPrompt": "분석 결과를 바탕으로 경영진을 위한 간결하고 명확한 보고서를 작성하세요." } },
+    { "type": "agent", "label": "데이터 분석가", "description": "데이터를 분석하고 인사이트 도출", "config": { "role": "analyst", "tools": ["Read", "Grep", "Glob"], "model": "sonnet", "systemPrompt": "주어진 데이터를 분석하여 핵심 인사이트를 도출하세요. 통계적 요약, 트렌드, 이상치를 파악하세요." } },
+    { "type": "agent", "label": "보고서 작성자", "description": "분석 결과로 보고서 작성", "config": { "role": "writer", "tools": ["Read", "Write"], "model": "opus", "systemPrompt": "분석 결과를 바탕으로 경영진을 위한 간결하고 명확한 보고서를 작성하세요." } },
     { "type": "output", "label": "분석 보고서", "description": "최종 분석 보고서", "config": { "outputType": "document" } }
   ],
   "edges": [{ "from": 0, "to": 1 }, { "from": 1, "to": 2 }, { "from": 2, "to": 3 }]

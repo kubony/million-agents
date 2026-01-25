@@ -49,7 +49,7 @@ function generateClaudePrompt(options: TerminalExecutionOptions): string {
   executionOrder.forEach((node) => {
     if (node.type === 'input') return;
 
-    if (node.type === 'subagent') {
+    if (node.type === 'agent') {
       const data = node.data as SubagentNodeData;
       lines.push(`${stepNum}. **${data.label}** (${data.role})`);
       if (data.description) {

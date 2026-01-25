@@ -208,7 +208,7 @@ export function buildNodePrompt(
 ): string {
   const lines: string[] = [];
 
-  if (nodeType === 'subagent') {
+  if (nodeType === 'agent') {
     const role = nodeData.role as string || 'assistant';
     const description = nodeData.description as string || '';
     const systemPrompt = nodeData.systemPrompt as string || '';

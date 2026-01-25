@@ -1,14 +1,14 @@
 import { memo } from 'react';
 import { Sparkles } from 'lucide-react';
 import BaseNode from './BaseNode';
-import type { SubagentNodeData } from '../../types/nodes';
+import type { AgentNodeData } from '../../types/nodes';
 
-interface SubagentNodeProps {
-  data: SubagentNodeData;
+interface AgentNodeProps {
+  data: AgentNodeData;
   selected: boolean;
 }
 
-function SubagentNode({ data, selected }: SubagentNodeProps) {
+function AgentNode({ data, selected }: AgentNodeProps) {
   return (
     <BaseNode
       data={data}
@@ -49,4 +49,4 @@ function SubagentNode({ data, selected }: SubagentNodeProps) {
   );
 }
 
-export default memo(SubagentNode);
+export default memo(AgentNode);

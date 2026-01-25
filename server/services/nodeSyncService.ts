@@ -3,7 +3,7 @@ import * as path from 'path';
 
 interface NodeData {
   id: string;
-  type: 'skill' | 'subagent' | 'command' | 'hook' | 'input' | 'output';
+  type: 'skill' | 'agent' | 'hook' | 'input' | 'output';
   label: string;
   description?: string;
   // Skill specific
@@ -11,14 +11,11 @@ interface NodeData {
   skillPath?: string;
   upstream?: string[];   // Connected upstream agents/skills
   downstream?: string[]; // Connected downstream agents/skills
-  // Subagent specific
+  // Agent specific
   tools?: string[];
   model?: string;
   skills?: string[];  // Connected downstream skills
   systemPrompt?: string;
-  // Command specific
-  commandName?: string;
-  commandContent?: string;
   // Hook specific
   hookEvent?: string;
   hookMatcher?: string;
@@ -47,10 +44,8 @@ export class NodeSyncService {
       switch (node.type) {
         case 'skill':
           return await this.syncSkillNode(node);
-        case 'subagent':
-          return await this.syncSubagentNode(node);
-        case 'command':
-          return await this.syncCommandNode(node);
+        case 'agent':
+          return await this.syncAgentNode(node);
         case 'hook':
           return await this.syncHookNode(node);
         case 'input':
@@ -86,15 +81,10 @@ export class NodeSyncService {
             await fs.rm(skillPath, { recursive: true, force: true });
           }
           break;
-        case 'subagent':
+        case 'agent':
           const agentName = this.toKebabCase(node.label);
           const agentPath = path.join(this.projectRoot, '.claude', 'agents', `${agentName}.md`);
           await fs.unlink(agentPath).catch(() => {});
-          break;
-        case 'command':
-          const cmdName = node.commandName || this.toKebabCase(node.label);
-          const cmdPath = path.join(this.projectRoot, '.claude', 'commands', `${cmdName}.md`);
-          await fs.unlink(cmdPath).catch(() => {});
           break;
         case 'hook':
           await this.removeHookFromSettings(node);
@@ -112,11 +102,11 @@ export class NodeSyncService {
    */
   private async removeReferencesToNode(nodeId: string, nodeType: string, allNodes: NodeData[]): Promise<void> {
     for (const relatedNode of allNodes) {
-      if (relatedNode.type === 'subagent') {
+      if (relatedNode.type === 'agent') {
         // 서브에이전트의 skills 배열에서 삭제된 노드 제거
         if (relatedNode.skills?.includes(nodeId)) {
           relatedNode.skills = relatedNode.skills.filter(s => s !== nodeId);
-          await this.syncSubagentNode(relatedNode);
+          await this.syncAgentNode(relatedNode);
         }
       } else if (relatedNode.type === 'skill') {
         let updated = false;
@@ -155,13 +145,13 @@ export class NodeSyncService {
       const targetId = this.getNodeIdentifier(targetNode);
 
       // 서브에이전트 → 스킬 연결
-      if (sourceNode.type === 'subagent' && targetNode.type === 'skill') {
+      if (sourceNode.type === 'agent' && targetNode.type === 'skill') {
         // 에이전트의 skills 필드 업데이트
         const skills = sourceNode.skills || [];
         if (!skills.includes(targetId)) {
           skills.push(targetId);
           sourceNode.skills = skills;
-          await this.syncSubagentNode(sourceNode);
+          await this.syncAgentNode(sourceNode);
         }
 
         // 스킬의 upstream 필드 업데이트
@@ -193,13 +183,13 @@ export class NodeSyncService {
       }
 
       // 스킬 → 서브에이전트 연결
-      if (sourceNode.type === 'skill' && targetNode.type === 'subagent') {
+      if (sourceNode.type === 'skill' && targetNode.type === 'agent') {
         // 에이전트의 upstream skills 필드 업데이트
         const skills = targetNode.skills || [];
         if (!skills.includes(sourceId)) {
           skills.push(sourceId);
           targetNode.skills = skills;
-          await this.syncSubagentNode(targetNode);
+          await this.syncAgentNode(targetNode);
         }
 
         // 스킬의 downstream 필드 업데이트
@@ -212,13 +202,13 @@ export class NodeSyncService {
       }
 
       // 서브에이전트 → 서브에이전트 연결
-      if (sourceNode.type === 'subagent' && targetNode.type === 'subagent') {
+      if (sourceNode.type === 'agent' && targetNode.type === 'agent') {
         // source의 downstream agents
         const sourceDownstream = sourceNode.skills || [];
         if (!sourceDownstream.includes(targetId)) {
           sourceDownstream.push(targetId);
           sourceNode.skills = sourceDownstream;
-          await this.syncSubagentNode(sourceNode);
+          await this.syncAgentNode(sourceNode);
         }
       }
 
@@ -255,10 +245,10 @@ export class NodeSyncService {
       const targetId = this.getNodeIdentifier(targetNode);
 
       // 서브에이전트 → 스킬 연결 해제
-      if (sourceNode.type === 'subagent' && targetNode.type === 'skill') {
+      if (sourceNode.type === 'agent' && targetNode.type === 'skill') {
         // 에이전트에서 스킬 제거
         sourceNode.skills = (sourceNode.skills || []).filter(s => s !== targetId);
-        await this.syncSubagentNode(sourceNode);
+        await this.syncAgentNode(sourceNode);
 
         // 스킬에서 upstream 제거
         targetNode.upstream = (targetNode.upstream || []).filter(s => s !== sourceId);
@@ -275,18 +265,18 @@ export class NodeSyncService {
       }
 
       // 스킬 → 서브에이전트 연결 해제
-      if (sourceNode.type === 'skill' && targetNode.type === 'subagent') {
+      if (sourceNode.type === 'skill' && targetNode.type === 'agent') {
         targetNode.skills = (targetNode.skills || []).filter(s => s !== sourceId);
-        await this.syncSubagentNode(targetNode);
+        await this.syncAgentNode(targetNode);
 
         sourceNode.downstream = (sourceNode.downstream || []).filter(s => s !== targetId);
         await this.syncSkillNode(sourceNode);
       }
 
       // 서브에이전트 → 서브에이전트 연결 해제
-      if (sourceNode.type === 'subagent' && targetNode.type === 'subagent') {
+      if (sourceNode.type === 'agent' && targetNode.type === 'agent') {
         sourceNode.skills = (sourceNode.skills || []).filter(s => s !== targetId);
-        await this.syncSubagentNode(sourceNode);
+        await this.syncAgentNode(sourceNode);
       }
 
       return { success: true };
@@ -357,7 +347,7 @@ ${frontmatterStr}
     return { success: true, path: skillPath };
   }
 
-  private async syncSubagentNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {
+  private async syncAgentNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {
     const agentName = this.toKebabCase(node.label);
     const agentsDir = path.join(this.projectRoot, '.claude', 'agents');
     const agentPath = path.join(agentsDir, `${agentName}.md`);
@@ -444,26 +434,6 @@ ${body}
     }
 
     return { frontmatter, body };
-  }
-
-  private async syncCommandNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {
-    const cmdName = node.commandName || this.toKebabCase(node.label);
-    const commandsDir = path.join(this.projectRoot, '.claude', 'commands');
-    const cmdPath = path.join(commandsDir, `${cmdName}.md`);
-
-    await fs.mkdir(commandsDir, { recursive: true });
-
-    const content = node.commandContent || `---
-description: ${node.description || node.label}
----
-
-${node.description || '커맨드 내용을 여기에 작성하세요'}
-
-$ARGUMENTS
-`;
-
-    await fs.writeFile(cmdPath, content, 'utf-8');
-    return { success: true, path: cmdPath };
   }
 
   private async syncHookNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {

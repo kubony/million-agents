@@ -17,9 +17,8 @@ import {
 } from '@xyflow/react';
 
 import InputNode from '../nodes/InputNode';
-import SubagentNode from '../nodes/SubagentNode';
+import AgentNode from '../nodes/AgentNode';
 import SkillNode from '../nodes/SkillNode';
-import CommandNode from '../nodes/CommandNode';
 import HookNode from '../nodes/HookNode';
 import OutputNode from '../nodes/OutputNode';
 import { useWorkflowStore } from '../../stores/workflowStore';
@@ -30,9 +29,8 @@ import type { WorkflowNode, WorkflowEdge } from '../../types/nodes';
 
 const nodeTypes: NodeTypes = {
   input: InputNode,
-  subagent: SubagentNode,
+  agent: AgentNode,
   skill: SkillNode,
-  command: CommandNode,
   hook: HookNode,
   output: OutputNode,
 };
@@ -234,7 +232,7 @@ export default function FlowCanvas() {
       setEdges(addEdge({ ...params, animated: true }, edges));
       storeAddEdge(newEdge);
 
-      // Sync edge to filesystem (updates subagent's skills field, etc.)
+      // Sync edge to filesystem (updates agent's skills field, etc.)
       syncEdge(newEdge, nodes as WorkflowNode[]).catch(err => {
         console.error('Failed to sync edge to filesystem:', err);
       });
@@ -291,12 +289,10 @@ export default function FlowCanvas() {
             switch (node.type) {
               case 'input':
                 return '#fef3c7';
-              case 'subagent':
+              case 'agent':
                 return '#4f46e5';
               case 'skill':
                 return '#06b6d4';
-              case 'command':
-                return '#f97316';
               case 'hook':
                 return '#ec4899';
               case 'output':
@@ -331,8 +327,7 @@ export default function FlowCanvas() {
                 <li key={node.id} className="flex items-center gap-2 text-sm">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                     node.type === 'skill' ? 'bg-cyan-500/20 text-cyan-300' :
-                    node.type === 'subagent' ? 'bg-indigo-500/20 text-indigo-300' :
-                    node.type === 'command' ? 'bg-orange-500/20 text-orange-300' :
+                    node.type === 'agent' ? 'bg-indigo-500/20 text-indigo-300' :
                     node.type === 'hook' ? 'bg-pink-500/20 text-pink-300' :
                     'bg-zinc-500/20 text-zinc-300'
                   }`}>

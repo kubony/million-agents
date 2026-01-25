@@ -40,7 +40,7 @@ export class ClaudeService {
       case 'input':
         return this.executeInputNode(node.id, node.data as InputNodeData);
 
-      case 'subagent':
+      case 'agent':
         return this.executeSubagentNode(
           node.id,
           node.data as SubagentNodeData,

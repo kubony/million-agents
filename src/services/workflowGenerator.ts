@@ -3,9 +3,8 @@ import type {
   WorkflowNode,
   WorkflowEdge,
   InputNodeData,
-  SubagentNodeData,
+  AgentNodeData,
   SkillNodeData,
-  CommandNodeData,
   HookNodeData,
   OutputNodeData,
   AgentRole,
@@ -26,7 +25,7 @@ interface AIWorkflowResult {
 }
 
 interface AIGeneratedNode {
-  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
+  type: 'input' | 'agent' | 'skill' | 'hook' | 'output';
   label: string;
   description: string;
   config: {
@@ -49,7 +48,7 @@ interface AIGeneratedNode {
 }
 
 interface WorkflowStep {
-  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
+  type: 'input' | 'agent' | 'skill' | 'hook' | 'output';
   label: string;
   description: string;
   config?: Record<string, unknown>;
@@ -69,7 +68,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Enter the topic to research',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Research Agent',
         description: 'Conduct comprehensive research on the topic',
         config: { role: 'researcher', tools: ['WebSearch', 'WebFetch', 'Read'] },
@@ -91,7 +90,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Describe what content you want to create',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Content Writer',
         description: 'Create high-quality content based on the brief',
         config: { role: 'writer', tools: ['Read', 'Write'] },
@@ -113,7 +112,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Data or content to analyze',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Analysis Agent',
         description: 'Perform detailed analysis',
         config: { role: 'analyst', tools: ['Read', 'Grep', 'Glob'] },
@@ -135,7 +134,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Describe what you want to build',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Developer Agent',
         description: 'Write code based on requirements',
         config: { role: 'coder', tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'] },
@@ -157,7 +156,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Describe the webpage you want',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Web Developer',
         description: 'Create HTML/CSS for the webpage',
         config: { role: 'coder', tools: ['Write'] },
@@ -207,7 +206,7 @@ const WORKFLOW_PATTERNS: Array<{
         description: 'Topic and outline for presentation',
       },
       {
-        type: 'subagent',
+        type: 'agent',
         label: 'Content Planner',
         description: 'Plan presentation structure and content',
         config: { role: 'writer', tools: ['Read'] },
@@ -236,7 +235,7 @@ const DEFAULT_STEPS: WorkflowStep[] = [
     description: 'Enter your input',
   },
   {
-    type: 'subagent',
+    type: 'agent',
     label: 'AI Assistant',
     description: 'Process the input and generate response',
     config: { role: 'custom', tools: ['Read', 'Write'] },
@@ -297,17 +296,17 @@ function createNodeFromStep(
         } as InputNodeData,
       };
 
-    case 'subagent':
+    case 'agent':
       return {
         id,
-        type: 'subagent',
+        type: 'agent',
         position,
         data: {
           ...baseData,
           role: step.config?.role || 'custom',
           tools: (step.config?.tools as string[]) || ['Read'],
           model: 'sonnet',
-        } as SubagentNodeData,
+        } as AgentNodeData,
       };
 
     case 'skill':
@@ -320,18 +319,6 @@ function createNodeFromStep(
           skillType: (step.config?.skillType as 'official' | 'custom') || 'official',
           skillId: (step.config?.skillId as string) || undefined,
         } as SkillNodeData,
-      };
-
-    case 'command':
-      return {
-        id,
-        type: 'command',
-        position,
-        data: {
-          ...baseData,
-          commandName: (step.config?.commandName as string) || '',
-          commandPath: (step.config?.commandPath as string) || '',
-        } as CommandNodeData,
       };
 
     case 'hook':
@@ -407,9 +394,9 @@ export function enhanceWorkflowFromPrompt(
       };
     }
 
-    if (node.type === 'subagent') {
+    if (node.type === 'agent') {
       // Extract specific instructions from prompt
-      const data = node.data as SubagentNodeData;
+      const data = node.data as AgentNodeData;
       return {
         ...node,
         data: {
@@ -641,10 +628,10 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         });
         break;
 
-      case 'subagent':
+      case 'agent':
         nodes.push({
           id,
-          type: 'subagent',
+          type: 'agent',
           position: { ...tempPosition },
           data: {
             ...baseData,
@@ -652,7 +639,7 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
             tools: aiNode.config.tools || ['Read', 'Write'],
             model: (aiNode.config.model as 'sonnet' | 'opus' | 'haiku') || 'sonnet',
             systemPrompt: aiNode.config.systemPrompt,
-          } as SubagentNodeData,
+          } as AgentNodeData,
         });
         break;
 
@@ -667,19 +654,6 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
             skillId: aiNode.config.skillId,
             skillContent: aiNode.config.skillContent,
           } as SkillNodeData,
-        });
-        break;
-
-      case 'command':
-        nodes.push({
-          id,
-          type: 'command',
-          position: { ...tempPosition },
-          data: {
-            ...baseData,
-            commandName: aiNode.config.commandName || aiNode.label,
-            commandPath: aiNode.config.commandPath,
-          } as CommandNodeData,
         });
         break;
 

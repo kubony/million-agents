@@ -1,11 +1,11 @@
-import { MessageSquare, Sparkles, BarChart3, Zap, Terminal, Anchor } from 'lucide-react';
+import { MessageSquare, Sparkles, BarChart3, Zap, Anchor } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { nanoid } from 'nanoid';
 import { syncNode } from '../../services/syncService';
-import type { WorkflowNode, InputNodeData, SubagentNodeData, SkillNodeData, CommandNodeData, HookNodeData, OutputNodeData } from '../../types/nodes';
+import type { WorkflowNode, InputNodeData, AgentNodeData, SkillNodeData, HookNodeData, OutputNodeData } from '../../types/nodes';
 
 interface PaletteItem {
-  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
+  type: 'input' | 'agent' | 'skill' | 'hook' | 'output';
   label: string;
   icon: React.ReactNode;
   color: string;
@@ -21,8 +21,8 @@ const paletteItems: PaletteItem[] = [
     hoverColor: 'hover:bg-yellow-500/10',
   },
   {
-    type: 'subagent',
-    label: 'Sub Agent',
+    type: 'agent',
+    label: 'Agent',
     icon: <Sparkles className="w-4 h-4" />,
     color: 'text-purple-400',
     hoverColor: 'hover:bg-purple-500/10',
@@ -33,13 +33,6 @@ const paletteItems: PaletteItem[] = [
     icon: <Zap className="w-4 h-4" />,
     color: 'text-cyan-400',
     hoverColor: 'hover:bg-cyan-500/10',
-  },
-  {
-    type: 'command',
-    label: 'Command',
-    icon: <Terminal className="w-4 h-4" />,
-    color: 'text-orange-400',
-    hoverColor: 'hover:bg-orange-500/10',
   },
   {
     type: 'hook',
@@ -75,19 +68,19 @@ function createDefaultNodeData(type: PaletteItem['type']): WorkflowNode {
           placeholder: 'Enter your prompt...',
         } as InputNodeData,
       };
-    case 'subagent':
+    case 'agent':
       return {
         id,
-        type: 'subagent',
+        type: 'agent',
         position,
         data: {
-          label: 'Sub Agent',
+          label: 'Agent',
           description: 'Conduct in-depth research...',
           role: 'researcher',
           tools: ['WebSearch', 'WebFetch', 'Read'],
           status: 'idle',
           usedInputs: [],
-        } as SubagentNodeData,
+        } as AgentNodeData,
       };
     case 'skill':
       return {
@@ -101,19 +94,6 @@ function createDefaultNodeData(type: PaletteItem['type']): WorkflowNode {
           status: 'idle',
           usedInputs: [],
         } as SkillNodeData,
-      };
-    case 'command':
-      return {
-        id,
-        type: 'command',
-        position,
-        data: {
-          label: 'Command',
-          description: 'Execute a slash command...',
-          commandName: '',
-          status: 'idle',
-          usedInputs: [],
-        } as CommandNodeData,
       };
     case 'hook':
       return {

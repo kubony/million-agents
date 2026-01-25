@@ -11,8 +11,6 @@ interface NodeSyncData {
   model?: string;
   skills?: string[];
   systemPrompt?: string;
-  commandName?: string;
-  commandContent?: string;
   hookEvent?: string;
   hookMatcher?: string;
   hookCommand?: string;
@@ -36,19 +34,13 @@ function toSyncData(node: WorkflowNode): NodeSyncData {
         skillId: (node.data as any).skillId,
         skillPath: (node.data as any).skillPath,
       };
-    case 'subagent':
+    case 'agent':
       return {
         ...base,
         tools: (node.data as any).tools,
         model: (node.data as any).model,
         skills: (node.data as any).skills,
         systemPrompt: (node.data as any).systemPrompt,
-      };
-    case 'command':
-      return {
-        ...base,
-        commandName: (node.data as any).commandName,
-        commandContent: (node.data as any).commandContent,
       };
     case 'hook':
       return {
