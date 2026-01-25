@@ -4,6 +4,7 @@ import { useWorkflowStore } from '../../stores/workflowStore';
 import { syncNode, deleteNode } from '../../services/syncService';
 import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, CommandNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
+import { AVAILABLE_SKILLS } from '../../data/availableSkills';
 
 interface StepPanelProps {
   node: WorkflowNode | undefined;
@@ -410,13 +411,7 @@ function SkillSettings({
     }
   };
 
-  const skillOptions = [
-    { id: 'ppt-generator', name: 'PPT Generator', description: 'Create PowerPoint presentations' },
-    { id: 'image-gen-nanobanana', name: 'Image Generator', description: 'Generate images with AI' },
-    { id: 'pdf', name: 'PDF Processor', description: 'Process and create PDF documents' },
-    { id: 'xlsx', name: 'Excel Processor', description: 'Work with spreadsheets' },
-    { id: 'docx', name: 'Word Processor', description: 'Create and edit documents' },
-  ];
+  // AVAILABLE_SKILLS에서 import하여 Single Source of Truth 유지
 
   // 생성된 스킬인 경우 미리보기 UI
   if (data.skillType === 'generated' && data.skillPath) {
@@ -597,10 +592,10 @@ function SkillSettings({
           Select Skill
         </label>
         <div className="space-y-2">
-          {skillOptions.map((skill) => (
+          {AVAILABLE_SKILLS.map((skill) => (
             <button
               key={skill.id}
-              onClick={() => onUpdate({ skillId: skill.id })}
+              onClick={() => onUpdate({ skillId: skill.id, description: skill.description })}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${
                 data.skillId === skill.id
                   ? 'bg-accent/20 border-accent'

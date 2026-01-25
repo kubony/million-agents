@@ -103,12 +103,31 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       mergeExistingConfig: (loadedNodes) =>
         set((state) => {
-          // 기존 노드 ID 목록
-          const existingIds = new Set(state.nodes.map(n => n.id));
-          // 새로 로드된 노드 중 기존에 없는 것만 추가
+          // 로드된 노드의 ID 세트 (파일시스템에 실제 존재하는 것들)
+          const loadedIds = new Set(loadedNodes.map(n => n.id));
+
+          // 기존 노드 중:
+          // - config에서 로드된 노드 (ID가 skill-, subagent-, command-, hook- 으로 시작)는
+          //   파일시스템에 없으면 제거
+          // - 사용자가 직접 만든 노드 (nanoid로 생성된 ID)는 유지
+          const configPrefixes = ['skill-', 'subagent-', 'command-', 'hook-'];
+          const isConfigNode = (id: string) => configPrefixes.some(p => id.startsWith(p));
+
+          const existingNodes = state.nodes.filter(n => {
+            if (isConfigNode(n.id)) {
+              // config 노드는 파일시스템에 있어야 유지
+              return loadedIds.has(n.id);
+            }
+            // 사용자 노드는 항상 유지
+            return true;
+          });
+
+          // 새로 로드된 노드 중 기존에 없는 것 추가
+          const existingIds = new Set(existingNodes.map(n => n.id));
           const newNodes = loadedNodes.filter(n => !existingIds.has(n.id));
+
           return {
-            nodes: [...state.nodes, ...newNodes],
+            nodes: [...existingNodes, ...newNodes],
           };
         }),
 
