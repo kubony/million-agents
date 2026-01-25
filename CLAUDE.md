@@ -110,3 +110,68 @@ description: 스킬 설명
 # 스킬 사용법
 ...
 ```
+
+<!-- makecc-managed-section -->
+## makecc 스킬/워크플로우 규칙
+
+이 섹션은 makecc에 의해 자동 생성되었습니다.
+
+### Python 가상환경
+
+**모든 스킬은 프로젝트 로컬 가상환경을 사용합니다:**
+
+```
+.venv/
+```
+
+**사용 패턴:**
+
+```bash
+# 로컬 venv Python 직접 실행 (권장)
+.venv/bin/python script.py
+
+# 또는 활성화 후 실행
+source .venv/bin/activate && python script.py
+```
+
+### 패키지 관리
+
+**uv를 우선 사용합니다 (pip보다 10-100x 빠름):**
+
+```bash
+# uv로 패키지 설치 (권장)
+uv pip install --python .venv/bin/python package_name
+
+# requirements.txt 설치
+uv pip install --python .venv/bin/python -r requirements.txt
+
+# uv가 없으면 pip 폴백
+.venv/bin/pip install package_name
+```
+
+### 스킬 저장 경로
+
+| 항목 | 경로 |
+|------|------|
+| 스킬 | `.claude/skills/[skill-name]/` |
+| 에이전트 | `.claude/agents/[agent-name].md` |
+| 워크플로우 | `.claude/agents/[workflow-name].md` |
+
+### 스킬 구조
+
+```
+.claude/skills/[skill-name]/
+├── SKILL.md          # 스킬 정의 (필수)
+├── scripts/
+│   └── main.py       # 메인 스크립트
+└── requirements.txt  # 의존성 목록
+```
+
+### 스킬 실행 규칙
+
+1. **가상환경 사용**: 항상 `.venv/bin/python` 사용
+2. **의존성 설치**: `uv pip install` 우선, 실패 시 `pip` 폴백
+3. **경로 참조**: 상대 경로 대신 절대 경로 사용 권장
+4. **한글 지원**: 사용자 메시지는 한글로 출력
+
+<!-- /makecc-managed-section -->

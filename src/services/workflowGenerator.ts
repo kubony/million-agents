@@ -31,6 +31,7 @@ interface AIGeneratedNode {
   config: {
     inputType?: 'text' | 'file' | 'select';
     placeholder?: string;
+    defaultValue?: string;
     role?: string;
     tools?: string[];
     model?: string;
@@ -480,8 +481,9 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
 }
 
 /**
- * 트리/병렬 레이아웃 알고리즘
+ * 트리/병렬 레이아웃 알고리즘 (서브트리 기반)
  * 엣지 관계를 분석하여 노드를 트리 구조로 배치
+ * 각 노드의 Y 위치는 서브트리 크기를 기반으로 계산하여 겹침 방지
  * @param nodes - 레이아웃을 적용할 노드 배열
  * @param edges - 노드 간 연결 정보
  * @returns 새로운 위치가 적용된 노드 배열
@@ -493,7 +495,7 @@ export function applyTreeLayout(
   if (nodes.length === 0) return nodes;
 
   const xSpacing = 300;
-  const ySpacing = 150;
+  const ySpacing = 180; // 노드 간 Y 간격
   const startX = 100;
   const startY = 100;
 
@@ -554,33 +556,112 @@ export function applyTreeLayout(
     });
   }
 
-  // depth별로 노드 그룹화
-  const nodesByDepth = new Map<number, string[]>();
-  nodeDepths.forEach((depth, nodeId) => {
-    const nodesAtDepth = nodesByDepth.get(depth) || [];
-    nodesAtDepth.push(nodeId);
-    nodesByDepth.set(depth, nodesAtDepth);
+  // 각 노드의 서브트리 높이 계산 (리프 노드부터 역방향)
+  const subtreeHeight = new Map<string, number>();
+  const visited = new Set<string>();
+
+  // 토폴로지 정렬된 순서로 처리 (depth가 큰 것부터)
+  const sortedNodes = [...nodes].sort((a, b) => {
+    const depthA = nodeDepths.get(a.id) ?? 0;
+    const depthB = nodeDepths.get(b.id) ?? 0;
+    return depthB - depthA; // 역순 (깊은 노드부터)
   });
 
-  // 각 depth에서 노드들의 Y 위치 계산
-  const maxDepth = Math.max(...Array.from(nodeDepths.values()), 0);
+  // 서브트리 높이 계산
+  function calculateSubtreeHeight(nodeId: string): number {
+    if (subtreeHeight.has(nodeId)) return subtreeHeight.get(nodeId)!;
+
+    const children = outgoingEdges.get(nodeId) || [];
+
+    if (children.length === 0) {
+      // 리프 노드: 높이 1
+      subtreeHeight.set(nodeId, 1);
+      return 1;
+    }
+
+    // 자식들의 서브트리 높이 합
+    let totalChildrenHeight = 0;
+    children.forEach((childId) => {
+      totalChildrenHeight += calculateSubtreeHeight(childId);
+    });
+
+    // 자신의 높이는 자식들의 합 (최소 1)
+    const height = Math.max(1, totalChildrenHeight);
+    subtreeHeight.set(nodeId, height);
+    return height;
+  }
+
+  // 모든 노드의 서브트리 높이 계산
+  sortedNodes.forEach((node) => {
+    calculateSubtreeHeight(node.id);
+  });
+
+  // 노드 위치 계산 (루트부터 DFS로)
   const nodePositions = new Map<string, { x: number; y: number }>();
 
-  for (let depth = 0; depth <= maxDepth; depth++) {
-    const nodesAtDepth = nodesByDepth.get(depth) || [];
-    const nodeCount = nodesAtDepth.length;
+  function assignPositions(
+    nodeId: string,
+    depth: number,
+    yStart: number,
+    yEnd: number
+  ): void {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
 
-    // Y 위치를 중앙에서 분산
-    const totalHeight = (nodeCount - 1) * ySpacing;
-    const startYForDepth = startY + (300 - totalHeight) / 2; // 300은 캔버스 중앙 기준
+    const nodeHeight = subtreeHeight.get(nodeId) || 1;
+    const yRange = yEnd - yStart;
 
-    nodesAtDepth.forEach((nodeId, index) => {
-      nodePositions.set(nodeId, {
-        x: startX + depth * xSpacing,
-        y: startYForDepth + index * ySpacing,
+    // 노드 Y 위치: 할당된 범위의 중앙
+    const y = yStart + yRange / 2;
+    const x = startX + depth * xSpacing;
+
+    nodePositions.set(nodeId, { x, y });
+
+    // 자식 노드들에 Y 범위 할당
+    const children = outgoingEdges.get(nodeId) || [];
+    if (children.length > 0) {
+      let currentY = yStart;
+
+      children.forEach((childId) => {
+        const childHeight = subtreeHeight.get(childId) || 1;
+        const childYRange = (childHeight / nodeHeight) * yRange;
+
+        assignPositions(
+          childId,
+          depth + 1,
+          currentY,
+          currentY + childYRange
+        );
+
+        currentY += childYRange;
       });
-    });
+    }
   }
+
+  // 시작 Y 위치
+  let currentY = startY;
+
+  // 루트 노드들 처리
+  rootNodes.forEach((node) => {
+    const nodeHeight = subtreeHeight.get(node.id) || 1;
+    const nodeYRange = nodeHeight * ySpacing;
+
+    visited.clear(); // 각 루트별로 visited 초기화
+    assignPositions(node.id, 0, currentY, currentY + nodeYRange);
+
+    currentY += nodeYRange;
+  });
+
+  // depth가 계산되지 않은 고립된 노드 처리
+  nodes.forEach((node) => {
+    if (!nodePositions.has(node.id)) {
+      nodePositions.set(node.id, {
+        x: startX,
+        y: currentY,
+      });
+      currentY += ySpacing;
+    }
+  });
 
   // 노드에 새 위치 적용
   return nodes.map((node) => {
@@ -624,6 +705,8 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
             ...baseData,
             inputType: aiNode.config.inputType || 'text',
             placeholder: aiNode.config.placeholder || aiNode.description,
+            value: aiNode.config.defaultValue || '',
+            defaultValue: aiNode.config.defaultValue || '',
           } as InputNodeData,
         });
         break;

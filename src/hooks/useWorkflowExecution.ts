@@ -108,6 +108,19 @@ export function useWorkflowExecution() {
 
     addLog('info', `워크플로우 "${workflowName}" 실행 시작 (Claude CLI)...`);
 
+    // Input 노드들의 값을 수집
+    const inputs: Record<string, string> = {};
+    nodes.forEach((n) => {
+      if (n.type === 'input') {
+        const data = n.data as Record<string, unknown>;
+        // value, defaultValue, placeholder 순으로 fallback
+        const value = (data.value as string) || (data.defaultValue as string) || (data.placeholder as string) || '';
+        if (value) {
+          inputs[n.id] = value;
+        }
+      }
+    });
+
     // Socket.IO로 워크플로우 실행 요청
     socketService.executeWorkflow({
       workflowId,
@@ -122,6 +135,7 @@ export function useWorkflowExecution() {
         source: e.source,
         target: e.target,
       })),
+      inputs,
     });
   }, [nodes, edges, workflowName, addLog, clearLogs, startExecution]);
 

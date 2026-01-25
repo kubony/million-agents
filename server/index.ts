@@ -255,7 +255,7 @@ app.get('/api/load/claude-config', async (req, res) => {
 // Generate workflow using AI
 app.post('/api/generate/workflow', async (req, res) => {
   try {
-    const { prompt } = req.body as { prompt: string };
+    const { prompt, expand = true } = req.body as { prompt: string; expand?: boolean };
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ message: 'Prompt is required' });
@@ -266,13 +266,21 @@ app.post('/api/generate/workflow', async (req, res) => {
     const apiKey = req.headers['x-api-key'] as string;
     const proxyUrl = req.headers['x-proxy-url'] as string;
 
-    console.log('Generating workflow for prompt:', prompt, 'mode:', apiMode);
+    console.log('Generating workflow for prompt:', prompt, 'mode:', apiMode, 'expand:', expand);
 
-    const result = await workflowAIService.generate(prompt, {
+    const settings = {
       apiMode: apiMode as 'proxy' | 'direct',
       apiKey,
       proxyUrl,
-    });
+    };
+
+    // expand=true (기본값)이면 재귀적으로 스킬/에이전트 상세 생성
+    const result = expand
+      ? await workflowAIService.generateWithExpansion(prompt, settings, (event) => {
+          console.log(`[Workflow] ${event.step}: ${event.message}`);
+        })
+      : await workflowAIService.generate(prompt, settings);
+
     console.log('Workflow generated:', result.workflowName);
 
     res.json(result);

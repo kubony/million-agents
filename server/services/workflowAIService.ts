@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { skillGeneratorService } from './skillGeneratorService';
 
 // API 설정 타입
 export interface ApiSettings {
@@ -6,6 +7,14 @@ export interface ApiSettings {
   apiKey?: string;
   proxyUrl?: string;
 }
+
+// 진행 상황 콜백
+export type WorkflowProgressCallback = (event: {
+  step: 'workflow' | 'skill' | 'agent' | 'completed';
+  message: string;
+  current?: number;
+  total?: number;
+}) => void;
 
 // AI가 생성하는 워크플로우 결과 타입
 export interface AIWorkflowResult {
@@ -23,6 +32,7 @@ export interface AIGeneratedNode {
     // input
     inputType?: 'text' | 'file' | 'select';
     placeholder?: string;
+    defaultValue?: string; // 기본 입력값
     // agent
     role?: string;
     tools?: string[];
@@ -69,22 +79,23 @@ ${AVAILABLE_TOOLS.join(', ')}
 반드시 아래 형식의 유효한 JSON으로 응답하세요. 다른 텍스트 없이 JSON만 반환하세요.
 
 {
-  "workflowName": "워크플로우 이름 (한글 가능)",
-  "description": "워크플로우 설명",
+  "workflowName": "Workflow Name in English",
+  "description": "워크플로우 설명 (한글 가능)",
   "nodes": [
     {
       "type": "input",
-      "label": "입력 노드 이름",
-      "description": "입력 설명",
+      "label": "input-name-in-english",
+      "description": "입력 설명 (한글 가능)",
       "config": {
         "inputType": "text",
-        "placeholder": "입력 안내"
+        "placeholder": "입력 안내",
+        "defaultValue": "워크플로우에 적합한 예시 입력값"
       }
     },
     {
       "type": "agent",
-      "label": "에이전트 이름",
-      "description": "에이전트 역할 설명",
+      "label": "agent-name-in-english",
+      "description": "에이전트 역할 설명 (한글 가능)",
       "config": {
         "role": "researcher|writer|analyst|coder|custom",
         "tools": ["Read", "Write"],
@@ -94,8 +105,8 @@ ${AVAILABLE_TOOLS.join(', ')}
     },
     {
       "type": "skill",
-      "label": "스킬 이름",
-      "description": "스킬 설명",
+      "label": "skill-name-in-english",
+      "description": "스킬 설명 (한글 가능)",
       "config": {
         "skillType": "official",
         "skillId": "image-gen-nanobanana"
@@ -103,18 +114,18 @@ ${AVAILABLE_TOOLS.join(', ')}
     },
     {
       "type": "skill",
-      "label": "커스텀 스킬 이름",
-      "description": "커스텀 스킬 설명",
+      "label": "custom-skill-name",
+      "description": "커스텀 스킬 설명 (한글 가능)",
       "config": {
         "skillType": "custom",
         "skillId": "my-custom-skill",
-        "skillContent": "---\\nname: my-custom-skill\\ndescription: 커스텀 스킬 설명\\n---\\n\\n# 스킬 내용\\n\\n구체적인 지시사항..."
+        "skillContent": "---\\nname: my-custom-skill\\ndescription: Custom skill description\\n---\\n\\n# Skill Instructions\\n\\nSpecific instructions..."
       }
     },
     {
       "type": "output",
-      "label": "출력 이름",
-      "description": "출력 설명",
+      "label": "output-name-in-english",
+      "description": "출력 설명 (한글 가능)",
       "config": {
         "outputType": "auto|markdown|document|image"
       }
@@ -134,30 +145,33 @@ ${AVAILABLE_TOOLS.join(', ')}
 5. edges의 from/to는 nodes 배열의 인덱스 (0부터 시작)
 6. 순차적으로 연결되지 않아도 됨 (병렬 처리, 합류 가능)
 7. systemPrompt는 구체적이고 실행 가능한 지시사항으로 작성
+8. **중요: label은 반드시 영어로, kebab-case 형식으로 작성 (예: blog-writer, data-analyzer)**
+9. workflowName도 영어로 작성
+10. **필수: input 노드의 config에 반드시 defaultValue 포함 - 워크플로우 목적에 맞는 구체적인 예시 값을 한글로 제공**
 
 ## 예시
 
 ### 예시 1: "이미지 3개 만들어줘"
 {
-  "workflowName": "이미지 생성",
+  "workflowName": "Image Generation",
   "description": "3개의 이미지를 생성하는 워크플로우",
   "nodes": [
-    { "type": "input", "label": "이미지 설명", "description": "생성할 이미지에 대한 설명", "config": { "inputType": "text", "placeholder": "이미지 프롬프트 입력" } },
-    { "type": "skill", "label": "이미지 생성기", "description": "AI로 이미지 생성", "config": { "skillType": "official", "skillId": "image-gen-nanobanana" } },
-    { "type": "output", "label": "생성된 이미지", "description": "생성된 이미지 결과", "config": { "outputType": "image" } }
+    { "type": "input", "label": "image-prompt", "description": "생성할 이미지에 대한 설명", "config": { "inputType": "text", "placeholder": "이미지 프롬프트 입력", "defaultValue": "미래적인 도시 야경, 네온 사인이 빛나는 사이버펑크 스타일" } },
+    { "type": "skill", "label": "image-generator", "description": "AI로 이미지 생성", "config": { "skillType": "official", "skillId": "image-gen-nanobanana" } },
+    { "type": "output", "label": "generated-images", "description": "생성된 이미지 결과", "config": { "outputType": "image" } }
   ],
   "edges": [{ "from": 0, "to": 1 }, { "from": 1, "to": 2 }]
 }
 
 ### 예시 2: "데이터 분석해서 보고서 만들어줘"
 {
-  "workflowName": "데이터 분석 보고서",
+  "workflowName": "Data Analysis Report",
   "description": "데이터를 분석하고 보고서를 작성하는 워크플로우",
   "nodes": [
-    { "type": "input", "label": "데이터 파일", "description": "분석할 데이터 파일", "config": { "inputType": "file" } },
-    { "type": "agent", "label": "데이터 분석가", "description": "데이터를 분석하고 인사이트 도출", "config": { "role": "analyst", "tools": ["Read", "Grep", "Glob"], "model": "sonnet", "systemPrompt": "주어진 데이터를 분석하여 핵심 인사이트를 도출하세요. 통계적 요약, 트렌드, 이상치를 파악하세요." } },
-    { "type": "agent", "label": "보고서 작성자", "description": "분석 결과로 보고서 작성", "config": { "role": "writer", "tools": ["Read", "Write"], "model": "opus", "systemPrompt": "분석 결과를 바탕으로 경영진을 위한 간결하고 명확한 보고서를 작성하세요." } },
-    { "type": "output", "label": "분석 보고서", "description": "최종 분석 보고서", "config": { "outputType": "document" } }
+    { "type": "input", "label": "data-file", "description": "분석할 데이터 파일", "config": { "inputType": "file", "defaultValue": "2024년 1~3분기 매출 데이터: 1월 1200만, 2월 1350만, 3월 1100만, 4월 1500만, 5월 1650만, 6월 1400만, 7월 1800만, 8월 1750만, 9월 1900만" } },
+    { "type": "agent", "label": "data-analyzer", "description": "데이터를 분석하고 인사이트 도출", "config": { "role": "analyst", "tools": ["Read", "Grep", "Glob"], "model": "sonnet", "systemPrompt": "주어진 데이터를 분석하여 핵심 인사이트를 도출하세요. 통계적 요약, 트렌드, 이상치를 파악하세요." } },
+    { "type": "agent", "label": "report-writer", "description": "분석 결과로 보고서 작성", "config": { "role": "writer", "tools": ["Read", "Write"], "model": "opus", "systemPrompt": "분석 결과를 바탕으로 경영진을 위한 간결하고 명확한 보고서를 작성하세요." } },
+    { "type": "output", "label": "analysis-report", "description": "최종 분석 보고서", "config": { "outputType": "document" } }
   ],
   "edges": [{ "from": 0, "to": 1 }, { "from": 1, "to": 2 }, { "from": 2, "to": 3 }]
 }
@@ -271,6 +285,181 @@ export class WorkflowAIService {
     );
 
     return result;
+  }
+
+  /**
+   * 워크플로우 생성 + 재귀적 노드 확장
+   * 각 custom 스킬과 에이전트에 대해 상세 내용 생성
+   */
+  async generateWithExpansion(
+    prompt: string,
+    settings?: ApiSettings,
+    onProgress?: WorkflowProgressCallback
+  ): Promise<AIWorkflowResult> {
+    // 1. 워크플로우 구조 생성
+    onProgress?.({ step: 'workflow', message: '워크플로우 구조를 생성하고 있습니다...' });
+    const result = await this.generate(prompt, settings);
+
+    // 2. 확장이 필요한 노드 식별
+    const customSkills = result.nodes.filter(
+      (n) => n.type === 'skill' && n.config.skillType === 'custom'
+    );
+    const agents = result.nodes.filter((n) => n.type === 'agent');
+
+    const totalExpansions = customSkills.length + agents.length;
+    let current = 0;
+
+    // 3. 각 custom 스킬 확장
+    for (const skill of customSkills) {
+      current++;
+      onProgress?.({
+        step: 'skill',
+        message: `스킬 "${skill.label}" 상세 생성 중...`,
+        current,
+        total: totalExpansions,
+      });
+
+      try {
+        // skillGeneratorService를 사용하여 완전한 스킬 생성
+        const skillPrompt = this.buildSkillPrompt(skill, result);
+        const skillResult = await skillGeneratorService.generate(skillPrompt, settings);
+
+        if (skillResult.success && skillResult.skill) {
+          // 생성된 스킬 정보로 노드 업데이트
+          skill.config.skillId = skillResult.skill.skillId;
+          skill.config.skillContent = undefined; // 파일로 저장되었으므로 제거
+          // savedPath는 로그로만 출력 (타입에 없음)
+          console.log(`Skill saved to: ${skillResult.savedPath}`);
+        }
+      } catch (error) {
+        console.error(`Failed to expand skill ${skill.label}:`, error);
+        // 실패해도 계속 진행
+      }
+    }
+
+    // 4. 각 에이전트 확장 (상세 systemPrompt 생성)
+    for (const agent of agents) {
+      current++;
+      onProgress?.({
+        step: 'agent',
+        message: `에이전트 "${agent.label}" 상세 생성 중...`,
+        current,
+        total: totalExpansions,
+      });
+
+      try {
+        const expandedPrompt = await this.expandAgentPrompt(agent, result, settings);
+        agent.config.systemPrompt = expandedPrompt;
+      } catch (error) {
+        console.error(`Failed to expand agent ${agent.label}:`, error);
+        // 실패해도 계속 진행
+      }
+    }
+
+    onProgress?.({ step: 'completed', message: '워크플로우 생성 완료!' });
+    return result;
+  }
+
+  /**
+   * 스킬 생성을 위한 상세 프롬프트 빌드
+   */
+  private buildSkillPrompt(skill: AIGeneratedNode, workflow: AIWorkflowResult): string {
+    // 워크플로우에서 이 스킬의 연결 관계 파악
+    const skillIndex = workflow.nodes.indexOf(skill);
+    const upstreamNodes = workflow.edges
+      .filter((e) => e.to === skillIndex)
+      .map((e) => workflow.nodes[e.from]);
+    const downstreamNodes = workflow.edges
+      .filter((e) => e.from === skillIndex)
+      .map((e) => workflow.nodes[e.to]);
+
+    const contextParts = [
+      `스킬 이름: ${skill.label}`,
+      `설명: ${skill.description}`,
+      `워크플로우: ${workflow.workflowName}`,
+    ];
+
+    if (upstreamNodes.length > 0) {
+      contextParts.push(
+        `이전 단계: ${upstreamNodes.map((n) => `${n.label} (${n.type})`).join(', ')}`
+      );
+    }
+
+    if (downstreamNodes.length > 0) {
+      contextParts.push(
+        `다음 단계: ${downstreamNodes.map((n) => `${n.label} (${n.type})`).join(', ')}`
+      );
+    }
+
+    if (skill.config.skillContent) {
+      contextParts.push(`기본 내용:\n${skill.config.skillContent}`);
+    }
+
+    return `다음 스킬을 생성해주세요:\n\n${contextParts.join('\n')}`;
+  }
+
+  /**
+   * 에이전트의 systemPrompt를 상세하게 확장
+   */
+  private async expandAgentPrompt(
+    agent: AIGeneratedNode,
+    workflow: AIWorkflowResult,
+    settings?: ApiSettings
+  ): Promise<string> {
+    const client = this.getClient(settings);
+
+    // 워크플로우에서 이 에이전트의 연결 관계 파악
+    const agentIndex = workflow.nodes.indexOf(agent);
+    const upstreamNodes = workflow.edges
+      .filter((e) => e.to === agentIndex)
+      .map((e) => workflow.nodes[e.from]);
+    const downstreamNodes = workflow.edges
+      .filter((e) => e.from === agentIndex)
+      .map((e) => workflow.nodes[e.to]);
+
+    const systemPrompt = `You are an expert at writing detailed system prompts for AI agents.
+Given an agent's context, generate a comprehensive system prompt that:
+1. Clearly defines the agent's role and responsibilities
+2. Specifies input/output expectations
+3. Provides step-by-step instructions
+4. Includes best practices and constraints
+5. Is written in Korean for user-facing parts
+
+Respond with ONLY the system prompt text, no explanations or formatting.`;
+
+    const userPrompt = `워크플로우: ${workflow.workflowName}
+워크플로우 설명: ${workflow.description}
+
+에이전트 정보:
+- 이름: ${agent.label}
+- 설명: ${agent.description}
+- 역할: ${agent.config.role || 'custom'}
+- 도구: ${(agent.config.tools || []).join(', ')}
+- 모델: ${agent.config.model || 'sonnet'}
+
+${upstreamNodes.length > 0 ? `이전 단계에서 받는 입력:\n${upstreamNodes.map((n) => `- ${n.label}: ${n.description}`).join('\n')}` : ''}
+
+${downstreamNodes.length > 0 ? `다음 단계로 전달할 출력:\n${downstreamNodes.map((n) => `- ${n.label}: ${n.description}`).join('\n')}` : ''}
+
+${agent.config.systemPrompt ? `기존 프롬프트 (확장 필요):\n${agent.config.systemPrompt}` : ''}
+
+이 에이전트를 위한 상세하고 실행 가능한 system prompt를 작성해주세요.`;
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    let result = '';
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        result += block.text;
+      }
+    }
+
+    return result.trim() || agent.config.systemPrompt || agent.description;
   }
 }
 
