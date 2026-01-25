@@ -1,6 +1,6 @@
 {
   "name": "makecc",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "type": "module",
   "description": "Visual workflow builder for Claude Code agents and skills",
   "keywords": [
