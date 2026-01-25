@@ -5,7 +5,8 @@ import type {
   InputNodeData,
   SubagentNodeData,
   SkillNodeData,
-  McpNodeData,
+  CommandNodeData,
+  HookNodeData,
   OutputNodeData,
   AgentRole,
 } from '../types/nodes';
@@ -24,7 +25,7 @@ interface AIWorkflowResult {
 }
 
 interface AIGeneratedNode {
-  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
   label: string;
   description: string;
   config: {
@@ -37,12 +38,17 @@ interface AIGeneratedNode {
     skillType?: 'official' | 'custom';
     skillId?: string;
     skillContent?: string;
+    commandName?: string;
+    commandPath?: string;
+    hookEvent?: string;
+    hookMatcher?: string;
+    hookCommand?: string;
     outputType?: 'auto' | 'markdown' | 'document' | 'image';
   };
 }
 
 interface WorkflowStep {
-  type: 'input' | 'subagent' | 'skill' | 'mcp' | 'output';
+  type: 'input' | 'subagent' | 'skill' | 'command' | 'hook' | 'output';
   label: string;
   description: string;
   config?: Record<string, unknown>;
@@ -315,17 +321,29 @@ function createNodeFromStep(
         } as SkillNodeData,
       };
 
-    case 'mcp':
+    case 'command':
       return {
         id,
-        type: 'mcp',
+        type: 'command',
         position,
         data: {
           ...baseData,
-          serverType: 'stdio',
-          serverName: (step.config?.serverName as string) || '',
-          serverConfig: {},
-        } as McpNodeData,
+          commandName: (step.config?.commandName as string) || '',
+          commandPath: (step.config?.commandPath as string) || '',
+        } as CommandNodeData,
+      };
+
+    case 'hook':
+      return {
+        id,
+        type: 'hook',
+        position,
+        data: {
+          ...baseData,
+          hookEvent: (step.config?.hookEvent as string) || 'PreToolUse',
+          hookMatcher: (step.config?.hookMatcher as string) || '',
+          hookCommand: (step.config?.hookCommand as string) || '',
+        } as HookNodeData,
       };
 
     case 'output':
@@ -637,17 +655,30 @@ function convertAIResponseToWorkflow(aiResult: AIWorkflowResult): GeneratedWorkf
         });
         break;
 
-      case 'mcp':
+      case 'command':
         nodes.push({
           id,
-          type: 'mcp',
+          type: 'command',
           position: { ...tempPosition },
           data: {
             ...baseData,
-            serverType: 'stdio',
-            serverName: aiNode.label,
-            serverConfig: {},
-          } as McpNodeData,
+            commandName: aiNode.config.commandName || aiNode.label,
+            commandPath: aiNode.config.commandPath,
+          } as CommandNodeData,
+        });
+        break;
+
+      case 'hook':
+        nodes.push({
+          id,
+          type: 'hook',
+          position: { ...tempPosition },
+          data: {
+            ...baseData,
+            hookEvent: aiNode.config.hookEvent || 'PreToolUse',
+            hookMatcher: aiNode.config.hookMatcher,
+            hookCommand: aiNode.config.hookCommand,
+          } as HookNodeData,
         });
         break;
 
