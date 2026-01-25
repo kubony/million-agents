@@ -28,6 +28,7 @@ export default function PromptBar() {
 
   // Socket.IO 이벤트 핸들러
   const handleSkillProgress = useCallback((event: SkillProgressEvent) => {
+    console.log('[PromptBar] Skill progress:', event.step, event.message);
     // 진행 상황을 로그에 추가
     const level = event.step === 'error' ? 'error' :
                   event.step === 'completed' ? 'success' : 'info';

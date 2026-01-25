@@ -1,7 +1,10 @@
 import { io, Socket } from 'socket.io-client';
 import type { NodeStatus } from '../types/nodes';
 
-const SOCKET_URL = 'http://localhost:3001';
+// 개발/프로덕션 환경에 따라 URL 결정
+const SOCKET_URL = import.meta.env.DEV
+  ? 'http://localhost:3001'
+  : window.location.origin;
 
 // Event types
 export interface NodeUpdateEvent {
@@ -99,7 +102,7 @@ class SocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('[Socket] Connected to server:', SOCKET_URL);
     });
 
     this.socket.on('disconnect', () => {
@@ -145,6 +148,7 @@ class SocketService {
 
   // 스킬 생성 요청
   generateSkill(request: SkillGenerationRequest): void {
+    console.log('[Socket] Generating skill:', request.prompt.slice(0, 50), 'connected:', this.socket.connected);
     this.emit('generate:skill', request);
   }
 
