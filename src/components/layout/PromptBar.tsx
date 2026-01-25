@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { nanoid } from 'nanoid';
 import { Sparkles, Send, Loader2, CheckCircle } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { generateWorkflowWithAI } from '../../services/workflowGenerator';
 import { generateSkill, isSkillGenerationRequest, type SkillGenerationResult } from '../../services/skillGenerator';
+import type { SkillNodeData } from '../../types/nodes';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
@@ -10,7 +12,7 @@ export default function PromptBar() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generatingType, setGeneratingType] = useState<'skill' | 'workflow'>('workflow');
-  const { loadWorkflow } = useWorkflowStore();
+  const { loadWorkflow, addNode, nodes } = useWorkflowStore();
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isGenerating) return;
@@ -29,10 +31,28 @@ export default function PromptBar() {
         const result: SkillGenerationResult = await generateSkill(prompt);
 
         if (result.success && result.skill) {
-          setSuccessMessage(`스킬 "${result.skill.skillName}"이 ${result.savedPath}에 저장되었습니다!`);
+          // 캔버스에 스킬 노드 추가
+          const newNodeId = nanoid();
+          const xOffset = nodes.length * 50; // 기존 노드 수에 따라 위치 조정
+
+          addNode({
+            id: newNodeId,
+            type: 'skill',
+            position: { x: 200 + xOffset, y: 200 },
+            data: {
+              label: result.skill.skillName,
+              description: result.skill.description,
+              status: 'idle',
+              skillType: 'custom',
+              skillId: result.skill.skillId,
+              skillPath: result.savedPath,
+            } as SkillNodeData,
+          });
+
+          setSuccessMessage(`스킬 "${result.skill.skillName}" 생성 완료!`);
           setPrompt('');
 
-          // 3초 후 메시지 숨김
+          // 5초 후 메시지 숨김
           setTimeout(() => setSuccessMessage(null), 5000);
         } else {
           throw new Error(result.error || '스킬 생성에 실패했습니다.');
