@@ -698,9 +698,12 @@ io.on('connection', (socket) => {
 // SPA fallback - serve index.html for all non-API routes in production
 if (isProduction) {
   const clientDistPath = join(__dirname, '..', 'dist', 'client');
-  app.get('/{*path}', (req, res) => {
-    res.sendFile(join(clientDistPath, 'index.html'));
-  });
+  const indexPath = join(clientDistPath, 'index.html');
+  if (existsSync(indexPath)) {
+    app.get('/{*path}', (req, res) => {
+      res.sendFile(indexPath);
+    });
+  }
 }
 
 const PORT = process.env.PORT || 3001;
