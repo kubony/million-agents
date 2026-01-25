@@ -1,16 +1,41 @@
 {
-  "name": "million-agent",
-  "private": true,
-  "version": "0.1.0",
+  "name": "makecc",
+  "version": "0.2.1",
   "type": "module",
+  "description": "Visual workflow builder for Claude Code agents and skills",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "workflow",
+    "agent",
+    "ai",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "bin": {
+    "makecc": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "server"
+  ],
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --outDir dist/client && npm run build:server",
+    "build:server": "tsc --project tsconfig.server.json",
+    "start": "tsx server/index.ts",
     "start:server": "tsx server/index.ts",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.19",

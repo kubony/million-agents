@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sparkles, Send, Loader2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
-import { generateWorkflowWithAI, generateAndEnhanceWorkflow } from '../../services/workflowGenerator';
+import { generateWorkflowWithAI } from '../../services/workflowGenerator';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
@@ -28,21 +28,9 @@ export default function PromptBar() {
 
       setPrompt('');
     } catch (err) {
-      console.error('AI workflow generation failed, falling back to pattern matching:', err);
-
-      // 폴백: 기존 패턴 매칭 방식 사용
-      try {
-        const generatedWorkflow = generateAndEnhanceWorkflow(prompt);
-        loadWorkflow({
-          nodes: generatedWorkflow.nodes,
-          edges: generatedWorkflow.edges,
-          name: prompt.slice(0, 30),
-        });
-        setPrompt('');
-      } catch (fallbackErr) {
-        console.error('Fallback generation also failed:', fallbackErr);
-        setError('워크플로우 생성에 실패했습니다. 다시 시도해주세요.');
-      }
+      console.error('AI workflow generation failed:', err);
+      const message = err instanceof Error ? err.message : '워크플로우 생성에 실패했습니다.';
+      setError(message);
     } finally {
       setIsGenerating(false);
     }

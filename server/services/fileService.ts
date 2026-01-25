@@ -70,7 +70,8 @@ export class FileService {
   private projectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.projectRoot = projectRoot || process.cwd();
+    // MAKECC_PROJECT_PATH: npx makecc 실행 시 사용자 프로젝트 경로
+    this.projectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
   }
 
   /**

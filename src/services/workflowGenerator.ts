@@ -421,18 +421,36 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
   workflow: GeneratedWorkflow;
   workflowName: string;
 }> {
-  const response = await fetch('/api/generate/workflow', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
+  let response: Response;
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to generate workflow');
+  try {
+    response = await fetch('/api/generate/workflow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+  } catch (err) {
+    throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
   }
 
-  const aiResult: AIWorkflowResult = await response.json();
+  if (!response.ok) {
+    let errorMessage = `서버 오류 (${response.status})`;
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch {
+      // JSON 파싱 실패 시 기본 메시지 사용
+    }
+    throw new Error(errorMessage);
+  }
+
+  let aiResult: AIWorkflowResult;
+  try {
+    aiResult = await response.json();
+  } catch {
+    throw new Error('서버 응답을 파싱할 수 없습니다.');
+  }
+
   const workflow = convertAIResponseToWorkflow(aiResult);
 
   return {

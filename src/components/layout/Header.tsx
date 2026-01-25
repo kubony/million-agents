@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Settings, Save, Download, Play } from 'lucide-react';
+import { ArrowLeft, Settings, Save, Download, Play, Trash2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
@@ -7,7 +7,7 @@ import SaveDialog from '../dialogs/SaveDialog';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
-  const { workflowName, setWorkflowName, isDraft, nodes, edges } = useWorkflowStore();
+  const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow } = useWorkflowStore();
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
@@ -26,6 +26,13 @@ export default function Header() {
   const handleRun = () => {
     if (!isRunning) {
       execute();
+    }
+  };
+
+  const handleClearWorkflow = () => {
+    if (nodes.length === 0) return;
+    if (window.confirm('모든 워크플로우를 삭제하시겠습니까?')) {
+      clearWorkflow();
     }
   };
 
@@ -83,6 +90,22 @@ export default function Header() {
         >
           <Download className="w-4 h-4 text-gray-400" />
           <span className="text-sm font-medium text-gray-300">Export</span>
+        </button>
+
+        <button
+          onClick={handleClearWorkflow}
+          disabled={nodes.length === 0}
+          className={`
+            flex items-center gap-2 px-3 py-2 rounded-lg transition-colors
+            ${nodes.length === 0
+              ? 'bg-surface-hover cursor-not-allowed opacity-50'
+              : 'bg-surface-hover hover:bg-red-500/20 hover:text-red-400'
+            }
+          `}
+          title="모든 노드 삭제"
+        >
+          <Trash2 className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-300">Clear</span>
         </button>
 
         <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
