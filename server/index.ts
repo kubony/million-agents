@@ -75,6 +75,38 @@ app.post('/api/save/workflow', async (req, res) => {
   }
 });
 
+// Save API key to .env
+app.post('/api/settings/api-key', async (req, res) => {
+  try {
+    const { apiKey } = req.body as { apiKey: string };
+
+    if (!apiKey) {
+      return res.status(400).json({ message: 'API key is required' });
+    }
+
+    const result = await fileService.saveApiKey(apiKey);
+    if (result.success) {
+      res.json({ success: true, message: 'API 키가 .env 파일에 저장되었습니다.' });
+    } else {
+      res.status(500).json({ success: false, message: result.error });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Get API settings
+app.get('/api/settings/api-key', async (req, res) => {
+  try {
+    const settings = await fileService.getApiSettings();
+    res.json(settings);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Generate workflow using AI
 app.post('/api/generate/workflow', async (req, res) => {
   try {

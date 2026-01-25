@@ -273,6 +273,65 @@ export class FileService {
   getProjectPath(): string {
     return this.projectRoot;
   }
+
+  /**
+   * Saves API key to .env file
+   */
+  async saveApiKey(apiKey: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const envPath = path.join(this.projectRoot, '.env');
+
+      // Read existing .env content
+      let envContent = '';
+      try {
+        envContent = await fs.readFile(envPath, 'utf-8');
+      } catch {
+        // File doesn't exist, will create new
+      }
+
+      // Parse existing env variables
+      const envLines = envContent.split('\n');
+      let found = false;
+      const updatedLines = envLines.map(line => {
+        if (line.startsWith('ANTHROPIC_API_KEY=')) {
+          found = true;
+          return `ANTHROPIC_API_KEY=${apiKey}`;
+        }
+        return line;
+      });
+
+      // Add if not found
+      if (!found) {
+        // Remove empty lines at the end before adding
+        while (updatedLines.length > 0 && updatedLines[updatedLines.length - 1].trim() === '') {
+          updatedLines.pop();
+        }
+        updatedLines.push(`ANTHROPIC_API_KEY=${apiKey}`);
+      }
+
+      // Write back
+      await fs.writeFile(envPath, updatedLines.join('\n') + '\n', 'utf-8');
+
+      // Update process.env for current session
+      process.env.ANTHROPIC_API_KEY = apiKey;
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Gets current API settings
+   */
+  async getApiSettings(): Promise<{ apiKey: string | null; hasEnvKey: boolean }> {
+    const envKey = process.env.ANTHROPIC_API_KEY;
+    return {
+      apiKey: envKey ? `${envKey.slice(0, 10)}...${envKey.slice(-4)}` : null,
+      hasEnvKey: !!envKey,
+    };
+  }
 }
 
 export const fileService = new FileService();

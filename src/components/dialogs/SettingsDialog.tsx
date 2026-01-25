@@ -26,10 +26,27 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setApiMode(localApiMode);
     setApiKey(localApiKey);
     setProxyUrl(localProxyUrl);
+
+    // Save API key to .env if direct mode and key provided
+    if (localApiMode === 'direct' && localApiKey) {
+      try {
+        const res = await fetch('/api/settings/api-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: localApiKey }),
+        });
+        if (!res.ok) {
+          console.error('Failed to save API key to .env');
+        }
+      } catch (err) {
+        console.error('Failed to save API key:', err);
+      }
+    }
+
     onClose();
   };
 
