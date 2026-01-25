@@ -21,87 +21,63 @@ export interface SkillGenerationResult {
   error?: string;
 }
 
-const SYSTEM_PROMPT = `당신은 Claude Code 스킬 생성 전문가입니다.
+const SYSTEM_PROMPT = `You are a Claude Code skill generator. You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no explanations - just pure JSON.
 
-사용자의 요청을 분석하여 완전히 작동하는 Claude Code 스킬을 생성합니다.
-
-## Claude Code 스킬 구조
-
-스킬은 다음 구조로 생성됩니다:
-\`\`\`
-.claude/skills/[skill-name]/
-├── SKILL.md          # 스킬 정의 (필수)
-├── scripts/          # 스크립트 폴더
-│   └── main.py       # 메인 스크립트
-└── requirements.txt  # Python 의존성 (필요시)
-\`\`\`
-
-## SKILL.md 형식
-
-\`\`\`markdown
----
-name: skill-name
-description: 스킬 설명 (한 줄)
----
-
-# 스킬 이름
-
-## 사용 시점
-이 스킬은 다음 상황에서 사용됩니다:
-- 상황 1
-- 상황 2
-
-## 사용 방법
-
-\\\`\\\`\\\`bash
-~/.claude/venv/bin/python ~/.claude/skills/[skill-name]/scripts/main.py [인자들]
-\\\`\\\`\\\`
-
-## 파라미터
-- \`param1\`: 설명
-- \`param2\`: 설명
-
-## 예시
-[사용 예시]
-\`\`\`
-
-## 응답 형식 (JSON)
-
-반드시 아래 형식의 JSON으로 응답하세요:
+Your response must follow this exact JSON schema:
 
 {
-  "skillName": "스킬 이름 (한글 가능)",
-  "skillId": "skill-id-kebab-case",
-  "description": "스킬 설명",
+  "skillName": "Human readable skill name",
+  "skillId": "skill-id-in-kebab-case",
+  "description": "Brief description of what this skill does",
   "files": [
     {
       "path": "SKILL.md",
-      "content": "SKILL.md 전체 내용",
+      "content": "Full SKILL.md content here",
       "language": "markdown"
     },
     {
       "path": "scripts/main.py",
-      "content": "Python 스크립트 전체 내용",
+      "content": "Full Python script content here",
       "language": "python"
     },
     {
       "path": "requirements.txt",
-      "content": "의존성 목록 (필요한 경우)",
+      "content": "package1\\npackage2",
       "language": "text"
     }
   ]
 }
 
-## 중요 규칙
+SKILL.md must follow this format:
+---
+name: skill-id
+description: One line description
+---
 
-1. **완전한 코드 생성**: 실제로 동작하는 완전한 코드를 작성하세요
-2. **에러 처리 포함**: try-except로 에러 처리를 포함하세요
-3. **한글 지원**: 출력 메시지는 한글로 작성하세요
-4. **환경 고려**:
-   - Python 스크립트는 \`~/.claude/venv/bin/python\`으로 실행됩니다
-   - 필요한 패키지는 requirements.txt에 명시하세요
-5. **JSON만 반환**: 설명 없이 JSON만 반환하세요
-`;
+# Skill Name
+
+## When to use
+- Use case 1
+- Use case 2
+
+## Usage
+\`\`\`bash
+~/.claude/venv/bin/python ~/.claude/skills/skill-id/scripts/main.py [args]
+\`\`\`
+
+## Parameters
+- \`--param1\`: Description
+
+## Example
+[Usage example]
+
+RULES:
+1. Generate COMPLETE, WORKING code - no placeholders
+2. Include proper error handling with try-except
+3. Use Korean for user-facing messages
+4. Scripts run with ~/.claude/venv/bin/python
+5. List all required packages in requirements.txt
+6. RESPOND WITH JSON ONLY - NO OTHER TEXT`;
 
 export class SkillGeneratorService {
   private projectRoot: string;
@@ -133,17 +109,19 @@ export class SkillGeneratorService {
   async generate(prompt: string, settings?: ApiSettings): Promise<SkillGenerationResult> {
     const client = this.getClient(settings);
 
-    const userPrompt = `다음 스킬을 생성해주세요: "${prompt}"
+    const userPrompt = `Create a skill for: "${prompt}"
 
-완전히 동작하는 코드를 포함한 스킬을 생성하세요.
-반드시 JSON만 반환하세요.`;
+Generate complete, working code. Respond with JSON only.`;
 
     try {
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
+        messages: [
+          { role: 'user', content: userPrompt },
+          { role: 'assistant', content: '{' }  // Prefill to force JSON
+        ],
       });
 
       let responseText = '';
@@ -157,15 +135,14 @@ export class SkillGeneratorService {
         return { success: false, error: 'AI 응답을 받지 못했습니다.' };
       }
 
-      // JSON 추출
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const rawJson = jsonMatch ? jsonMatch[1].trim() : responseText.trim();
+      // Prefill로 '{'를 보냈으니 응답 앞에 '{'를 붙임
+      const fullJson = '{' + responseText;
 
       let skill: GeneratedSkill;
       try {
-        skill = JSON.parse(rawJson);
+        skill = JSON.parse(fullJson);
       } catch {
-        console.error('Failed to parse skill response:', rawJson.slice(0, 500));
+        console.error('Failed to parse skill response:', fullJson.slice(0, 500));
         return { success: false, error: 'AI 응답을 파싱할 수 없습니다. 다시 시도해주세요.' };
       }
 
