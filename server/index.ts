@@ -5,11 +5,11 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, promises as fs } from 'fs';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
-import { skillGeneratorService } from './services/skillGeneratorService';
+import { skillGeneratorService, type SkillProgressEvent } from './services/skillGeneratorService';
 import { nodeSyncService } from './services/nodeSyncService';
 import { configLoaderService } from './services/configLoaderService';
 import { workflowExecutionService } from './services/workflowExecutionService';
@@ -271,6 +271,124 @@ app.post('/api/generate/workflow', async (req, res) => {
   }
 });
 
+// Test skill execution
+app.post('/api/skill/test', async (req, res) => {
+  const { spawn } = await import('child_process');
+
+  try {
+    const { skillPath, args } = req.body as { skillPath: string; args?: string[] };
+
+    if (!skillPath) {
+      return res.status(400).json({ message: 'Skill path is required' });
+    }
+
+    // 보안: 프로젝트 경로 내의 파일만 접근 허용
+    const projectRoot = fileService.getProjectPath();
+    if (!skillPath.startsWith(projectRoot)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const mainPyPath = join(skillPath, 'scripts', 'main.py');
+    if (!existsSync(mainPyPath)) {
+      return res.status(404).json({ message: 'main.py not found' });
+    }
+
+    // 전역 venv의 python 사용
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const pythonPath = join(homeDir, '.claude', 'venv', 'bin', 'python');
+    const command = existsSync(pythonPath) ? pythonPath : 'python3';
+
+    console.log(`Testing skill: ${command} ${mainPyPath}`);
+
+    return new Promise<void>((resolve) => {
+      const proc = spawn(command, [mainPyPath, ...(args || [])], {
+        cwd: skillPath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30000, // 30초 타임아웃
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        res.json({
+          success: code === 0,
+          exitCode: code,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+        });
+        resolve();
+      });
+
+      proc.on('error', (err) => {
+        res.status(500).json({
+          success: false,
+          error: err.message,
+        });
+        resolve();
+      });
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Skill test error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Read skill files for preview
+app.get('/api/skill/files', async (req, res) => {
+  try {
+    const skillPath = req.query.path as string;
+
+    if (!skillPath) {
+      return res.status(400).json({ message: 'Skill path is required' });
+    }
+
+    // 보안: 프로젝트 경로 내의 파일만 접근 허용
+    const projectRoot = fileService.getProjectPath();
+    if (!skillPath.startsWith(projectRoot)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const files: Array<{ name: string; content: string; language: string }> = [];
+
+    // SKILL.md 읽기
+    const skillMdPath = join(skillPath, 'SKILL.md');
+    if (existsSync(skillMdPath)) {
+      const content = await fs.readFile(skillMdPath, 'utf-8');
+      files.push({ name: 'SKILL.md', content, language: 'markdown' });
+    }
+
+    // scripts/main.py 읽기
+    const mainPyPath = join(skillPath, 'scripts', 'main.py');
+    if (existsSync(mainPyPath)) {
+      const content = await fs.readFile(mainPyPath, 'utf-8');
+      files.push({ name: 'scripts/main.py', content, language: 'python' });
+    }
+
+    // requirements.txt 읽기
+    const requirementsPath = join(skillPath, 'requirements.txt');
+    if (existsSync(requirementsPath)) {
+      const content = await fs.readFile(requirementsPath, 'utf-8');
+      files.push({ name: 'requirements.txt', content, language: 'text' });
+    }
+
+    res.json({ files });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Read skill files error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -406,6 +524,45 @@ io.on('connection', (socket) => {
   socket.on('execute:cancel', () => {
     claudeService.cancelExecution();
     socket.emit('workflow:cancelled');
+  });
+
+  // Generate skill with real-time progress
+  socket.on('generate:skill', async (data: {
+    prompt: string;
+    apiMode?: 'proxy' | 'direct';
+    apiKey?: string;
+    proxyUrl?: string;
+  }) => {
+    console.log('Generating skill via Socket.IO:', data.prompt);
+
+    try {
+      const result = await skillGeneratorService.generate(
+        data.prompt,
+        {
+          apiMode: data.apiMode || 'proxy',
+          apiKey: data.apiKey,
+          proxyUrl: data.proxyUrl,
+        },
+        // Progress callback
+        (event: SkillProgressEvent) => {
+          socket.emit('skill:progress', event);
+        }
+      );
+
+      if (result.success) {
+        socket.emit('skill:completed', {
+          skill: result.skill,
+          savedPath: result.savedPath,
+        });
+      } else {
+        socket.emit('skill:error', {
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      socket.emit('skill:error', { error: errorMessage });
+    }
   });
 
   socket.on('disconnect', () => {

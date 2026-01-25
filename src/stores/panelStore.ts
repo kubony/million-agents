@@ -11,6 +11,7 @@ interface PanelState {
   toggleCollapsed: () => void;
   setWidth: (width: number) => void;
   openStepPanel: () => void;
+  openConsolePanel: () => void;
 }
 
 export const usePanelStore = create<PanelState>((set) => ({
@@ -22,4 +23,5 @@ export const usePanelStore = create<PanelState>((set) => ({
   toggleCollapsed: () => set((state) => ({ isCollapsed: !state.isCollapsed })),
   setWidth: (width) => set({ width: Math.max(300, Math.min(600, width)) }),
   openStepPanel: () => set({ activeTab: 'step', isCollapsed: false }),
+  openConsolePanel: () => set({ activeTab: 'console', isCollapsed: false }),
 }));

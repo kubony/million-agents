@@ -39,12 +39,13 @@ export interface SubagentNodeData extends BaseNodeData {
 }
 
 // Skill node
-export type SkillType = 'official' | 'custom';
+export type SkillType = 'official' | 'custom' | 'generated';
 
 export interface SkillNodeData extends BaseNodeData {
   skillType: SkillType;
   skillId?: string;
   skillCategory?: string;
+  skillPath?: string; // 생성된 스킬의 파일 경로
   mdContent?: string;
   skillContent?: string; // AI가 생성한 커스텀 스킬 SKILL.md 내용
   usedInputs?: string[];

@@ -43,6 +43,50 @@ export interface WorkflowCompletedData {
   outputDir?: string;
 }
 
+// Skill generation types
+export type SkillProgressStep =
+  | 'started'
+  | 'analyzing'
+  | 'designing'
+  | 'generating'
+  | 'saving'
+  | 'installing'
+  | 'completed'
+  | 'error';
+
+export interface SkillProgressEvent {
+  step: SkillProgressStep;
+  message: string;
+  detail?: string;
+}
+
+export interface GeneratedSkill {
+  skillName: string;
+  skillId: string;
+  description: string;
+  files: Array<{
+    path: string;
+    content: string;
+    language: string;
+  }>;
+}
+
+export interface SkillCompletedData {
+  skill: GeneratedSkill;
+  savedPath: string;
+}
+
+export interface SkillErrorData {
+  error: string;
+}
+
+export interface SkillGenerationRequest {
+  prompt: string;
+  apiMode?: 'proxy' | 'direct';
+  apiKey?: string;
+  proxyUrl?: string;
+}
+
 class SocketService {
   private socket: Socket;
 
@@ -67,15 +111,15 @@ class SocketService {
     });
   }
 
-  // 이벤트 리스너 등록
-  on(event: string, callback: (...args: unknown[]) => void): void {
-    this.socket.on(event, callback);
+  // 이벤트 리스너 등록 (제네릭 타입 지원)
+  on<T = unknown>(event: string, callback: (data: T) => void): void {
+    this.socket.on(event, callback as (...args: unknown[]) => void);
   }
 
   // 이벤트 리스너 제거
-  off(event: string, callback?: (...args: unknown[]) => void): void {
+  off<T = unknown>(event: string, callback?: (data: T) => void): void {
     if (callback) {
-      this.socket.off(event, callback);
+      this.socket.off(event, callback as (...args: unknown[]) => void);
     } else {
       this.socket.off(event);
     }
@@ -97,6 +141,11 @@ class SocketService {
   // 실행 취소
   cancelExecution(): void {
     this.emit('execute:cancel');
+  }
+
+  // 스킬 생성 요청
+  generateSkill(request: SkillGenerationRequest): void {
+    this.emit('generate:skill', request);
   }
 
   // 연결 상태 확인
