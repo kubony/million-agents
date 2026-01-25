@@ -100,13 +100,23 @@ export default function PromptBar() {
         clearLogs();
         openConsolePanel();
 
+        // 즉시 시작 로그 추가 (서버 응답 전에 사용자에게 피드백)
+        addLog('info', '✨ 스킬 생성을 시작합니다...', undefined, `요청: "${prompt.slice(0, 50)}${prompt.length > 50 ? '...' : ''}"`);
+
+        // Socket 연결 상태 확인
+        if (!socketService.isConnected()) {
+          addLog('warning', '⚠️ 서버 연결 대기 중...', undefined, '잠시 후 자동으로 연결됩니다');
+        }
+
         socketService.generateSkill({
           prompt,
           apiMode,
           apiKey: apiMode === 'direct' ? apiKey : undefined,
           proxyUrl: apiMode === 'proxy' ? proxyUrl : undefined,
         });
-        // 결과는 Socket.IO 이벤트로 처리됨
+
+        addLog('info', '🔍 요청을 분석하고 있어요...', undefined, 'AI가 어떤 스킬이 필요한지 파악 중');
+        // 이후 진행 상황은 Socket.IO 이벤트로 처리됨
       } else {
         // 워크플로우 생성
         const { workflow, workflowName } = await generateWorkflowWithAI(prompt);
