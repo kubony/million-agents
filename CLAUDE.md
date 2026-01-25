@@ -44,6 +44,48 @@ makecc/
 └── dist/                   # 빌드 결과물
 ```
 
+## 애플리케이션 아키텍처
+
+### 라우팅 구조
+
+React Router로 두 가지 주요 페이지를 제공합니다:
+
+| 경로 | 컴포넌트 | 설명 |
+|------|---------|------|
+| `/` | `HomePage` | 프로젝트 목록 및 갤러리 |
+| `/project/:projectName` | `WorkflowBuilder` | 워크플로우 편집기 |
+
+### 홈 페이지 구조
+
+```
+src/components/home/
+├── HomePage.tsx           # 메인 홈 페이지
+├── ProjectCard.tsx        # 프로젝트 카드
+├── GalleryCard.tsx        # 갤러리 템플릿 카드
+└── CreateProjectDialog.tsx # 프로젝트 생성 다이얼로그
+```
+
+### 프로젝트 관리 API
+
+**기본 경로**: `~/makecc` (또는 `MAKECC_HOME` 환경변수)
+
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `GET /api/projects` | 프로젝트 + 갤러리 목록 |
+| `POST /api/projects` | 새 프로젝트 생성 |
+| `DELETE /api/projects/:id` | 프로젝트 삭제 (휴지통으로 이동) |
+
+### 프로젝트 디렉토리 구조
+
+```
+~/makecc/[project-name]/
+├── project.json        # 메타데이터 (id, description, createdAt)
+├── CLAUDE.md           # 프로젝트 가이드
+└── .claude/
+    ├── skills/         # 스킬 저장소
+    └── agents/         # 에이전트 저장소
+```
+
 ## 핵심 흐름
 
 ### 스킬 생성 플로우
