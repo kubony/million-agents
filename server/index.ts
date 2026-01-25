@@ -27,6 +27,7 @@ import { configLoaderService } from './services/configLoaderService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import { claudeMdService } from './services/claudeMdService';
+import { projectService } from './services/projectService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
@@ -68,6 +69,72 @@ app.get('/api/health', (req, res) => {
 // Get project path
 app.get('/api/project-path', (req, res) => {
   res.json({ path: fileService.getProjectPath() });
+});
+
+// ============================================
+// Project Management API
+// ============================================
+
+// List all projects
+app.get('/api/projects', async (req, res) => {
+  try {
+    const projects = await projectService.listProjects();
+    const gallery = projectService.getGalleryItems();
+    res.json({ projects, gallery });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('List projects error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Create a new project
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { name, description } = req.body as { name: string; description: string };
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ message: 'Project name is required' });
+    }
+
+    const project = await projectService.createProject(name, description || '');
+    res.json(project);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Create project error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Get a specific project
+app.get('/api/projects/:id', async (req, res) => {
+  try {
+    const project = await projectService.getProject(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+    res.json(project);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Delete a project
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    await projectService.deleteProject(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Delete project error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Get makecc home directory
+app.get('/api/makecc-home', (req, res) => {
+  res.json({ path: projectService.getMakeccHome() });
 });
 
 // Save workflow as Claude Code configuration
@@ -648,8 +715,16 @@ async function startServer() {
     // 초기화 실패해도 서버는 시작
   }
 
+  // 샘플 프로젝트 생성 (~/makecc에 없는 경우)
+  try {
+    await projectService.createSampleProjects();
+  } catch (error) {
+    console.error('Sample projects creation warning:', error);
+  }
+
   httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`makecc home: ${projectService.getMakeccHome()}`);
   });
 }
 
