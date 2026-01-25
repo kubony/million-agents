@@ -26,6 +26,7 @@ interface WorkflowState {
   // Workflow actions
   setWorkflowName: (name: string) => void;
   loadWorkflow: (data: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; name?: string }) => void;
+  mergeExistingConfig: (nodes: WorkflowNode[]) => void;
   clearWorkflow: () => void;
   newWorkflow: () => void;
 
@@ -98,6 +99,17 @@ export const useWorkflowStore = create<WorkflowState>()(
           edges: data.edges,
           workflowName: data.name || 'Imported Workflow',
           selectedNodeId: null,
+        }),
+
+      mergeExistingConfig: (loadedNodes) =>
+        set((state) => {
+          // 기존 노드 ID 목록
+          const existingIds = new Set(state.nodes.map(n => n.id));
+          // 새로 로드된 노드 중 기존에 없는 것만 추가
+          const newNodes = loadedNodes.filter(n => !existingIds.has(n.id));
+          return {
+            nodes: [...state.nodes, ...newNodes],
+          };
         }),
 
       clearWorkflow: () =>

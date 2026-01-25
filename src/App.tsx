@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Terminal } from 'lucide-react';
@@ -10,11 +10,30 @@ import PromptBar from './components/layout/PromptBar';
 import { FloatingConsolePanel } from './components/panels/ConsolePanel';
 import { usePanelStore } from './stores/panelStore';
 import { useExecutionStore } from './stores/executionStore';
+import { useWorkflowStore } from './stores/workflowStore';
+import { loadClaudeConfig } from './services/configLoader';
 
 function App() {
   const { isCollapsed, width } = usePanelStore();
   const { isRunning, logs } = useExecutionStore();
+  const { mergeExistingConfig } = useWorkflowStore();
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+  const initialLoadDone = useRef(false);
+
+  // Auto-load existing .claude/ config on startup
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    loadClaudeConfig().then((nodes) => {
+      if (nodes.length > 0) {
+        console.log(`Loaded ${nodes.length} nodes from .claude/`);
+        mergeExistingConfig(nodes);
+      }
+    }).catch((err) => {
+      console.error('Failed to load initial config:', err);
+    });
+  }, [mergeExistingConfig]);
 
   // Auto-open console when workflow starts running
   useEffect(() => {

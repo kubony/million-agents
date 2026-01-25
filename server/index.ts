@@ -11,6 +11,7 @@ import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
 import { skillGeneratorService } from './services/skillGeneratorService';
 import { nodeSyncService } from './services/nodeSyncService';
+import { configLoaderService } from './services/configLoaderService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
@@ -219,6 +220,22 @@ app.post('/api/generate/skill', async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Generate skill error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Load existing Claude config from .claude/ directory
+app.get('/api/load/claude-config', async (req, res) => {
+  try {
+    const config = await configLoaderService.loadAll();
+    console.log(
+      `Loaded config: ${config.skills.length} skills, ${config.subagents.length} agents, ` +
+      `${config.commands.length} commands, ${config.hooks.length} hooks`
+    );
+    res.json(config);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Load config error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });

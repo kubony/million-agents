@@ -1,18 +1,34 @@
-import { useState } from 'react';
-import { ArrowLeft, Settings, Save, Download, Play, Trash2 } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ArrowLeft, Settings, Save, Download, Play, Trash2, RefreshCw } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
+import { loadClaudeConfig } from '../../services/configLoader';
 import SaveDialog from '../dialogs/SaveDialog';
 import SettingsDialog from '../dialogs/SettingsDialog';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
-  const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow } = useWorkflowStore();
+  const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow, mergeExistingConfig } = useWorkflowStore();
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
+  const [isReloading, setIsReloading] = useState(false);
+
+  const handleReloadConfig = useCallback(async () => {
+    setIsReloading(true);
+    try {
+      const loadedNodes = await loadClaudeConfig();
+      if (loadedNodes.length > 0) {
+        mergeExistingConfig(loadedNodes);
+      }
+    } catch (error) {
+      console.error('Failed to reload config:', error);
+    } finally {
+      setIsReloading(false);
+    }
+  }, [mergeExistingConfig]);
 
   const handleExport = () => {
     const config = generateClaudeConfig(workflowName, nodes, edges, 'local');
@@ -92,6 +108,22 @@ export default function Header() {
         >
           <Download className="w-4 h-4 text-gray-400" />
           <span className="text-sm font-medium text-gray-300">Export</span>
+        </button>
+
+        <button
+          onClick={handleReloadConfig}
+          disabled={isReloading}
+          className={`
+            flex items-center gap-2 px-3 py-2 rounded-lg transition-colors
+            ${isReloading
+              ? 'bg-surface-hover cursor-not-allowed opacity-50'
+              : 'bg-surface-hover hover:bg-blue-500/20 hover:text-blue-400'
+            }
+          `}
+          title=".claude/ 폴더에서 다시 로드"
+        >
+          <RefreshCw className={`w-4 h-4 text-gray-400 ${isReloading ? 'animate-spin' : ''}`} />
+          <span className="text-sm font-medium text-gray-300">Reload</span>
         </button>
 
         <button
