@@ -137,7 +137,8 @@ export class WorkflowExecutionService {
     inputs?: Record<string, string>
   ): Promise<ExecutionResult> {
     const data = node.data as InputNodeData;
-    const value = inputs?.[node.id] || data.value || '';
+    // inputs에서 먼저 찾고, 없으면 node data의 value, defaultValue, placeholder 순으로 fallback
+    const value = inputs?.[node.id] || data.value || data.defaultValue || data.placeholder || '';
 
     return {
       nodeId: node.id,

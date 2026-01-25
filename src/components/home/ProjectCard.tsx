@@ -35,6 +35,11 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
       {/* Decorative shape */}
       <div className="absolute top-4 right-4 w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-sm transform rotate-12" />
 
+      {/* Hover tooltip */}
+      <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-md text-xs text-white/90 opacity-0 group-hover:opacity-100 transition-opacity">
+        클릭하여 열기
+      </div>
+
       {/* Menu button */}
       <button
         onClick={(e) => {

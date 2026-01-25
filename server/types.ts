@@ -21,6 +21,7 @@ export type OutputType = 'markdown' | 'document' | 'image' | 'webpage' | 'link' 
 export interface InputNodeData extends BaseNodeData {
   inputType: InputType;
   value?: string;
+  defaultValue?: string; // AI가 생성한 기본값
   placeholder?: string;
   options?: string[];
   fileTypes?: string[];

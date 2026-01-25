@@ -6,7 +6,7 @@ import type { WorkflowNode, AgentNodeData, InputNodeData, SkillNodeData, HookNod
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 import { AVAILABLE_SKILLS } from '../../data/availableSkills';
 
-interface StepPanelProps {
+interface PropertiesPanelProps {
   node: WorkflowNode | undefined;
 }
 
@@ -51,7 +51,7 @@ function getNodeTypeName(type: string | undefined) {
   }
 }
 
-export default function StepPanel({ node }: StepPanelProps) {
+export default function PropertiesPanel({ node }: PropertiesPanelProps) {
   const { updateNode, removeNode, nodes } = useWorkflowStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
