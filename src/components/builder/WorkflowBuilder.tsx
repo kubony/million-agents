@@ -1,62 +1,73 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Terminal } from 'lucide-react';
 import Header from '../layout/Header';
 import NodePalette from '../layout/NodePalette';
 import FlowCanvas from '../canvas/FlowCanvas';
-import RightPanel from '../layout/RightPanel';
+import RightSidebar from '../layout/RightSidebar';
 import PromptBar from '../layout/PromptBar';
-import { FloatingConsolePanel } from '../panels/ConsolePanel';
+import BottomConsolePanel from '../layout/BottomConsolePanel';
 import { usePanelStore } from '../../stores/panelStore';
-import { useExecutionStore } from '../../stores/executionStore';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { loadClaudeConfig } from '../../services/configLoader';
 
 export default function WorkflowBuilder() {
   const { isCollapsed, width } = usePanelStore();
-  const { isRunning, logs } = useExecutionStore();
-  const { mergeExistingConfig } = useWorkflowStore();
-  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+  const { mergeExistingConfig, clearWorkflow } = useWorkflowStore();
+  const { currentProject, navigateToPath } = useProjectStore();
   const initialLoadDone = useRef(false);
+  const lastProjectPath = useRef<string | null>(null);
 
-  // Auto-load existing .claude/ config on startup
+  // Navigate file explorer to project path on mount
   useEffect(() => {
+    if (currentProject?.path) {
+      navigateToPath(currentProject.path);
+    }
+  }, [currentProject?.path, navigateToPath]);
+
+  // Load .claude/ config when project changes
+  useEffect(() => {
+    if (!currentProject?.path) return;
+
+    // 프로젝트가 바뀌었는지 확인
+    const projectChanged = lastProjectPath.current !== currentProject.path;
+
+    if (projectChanged) {
+      // 프로젝트가 바뀌면 기존 워크플로우 클리어
+      clearWorkflow();
+      lastProjectPath.current = currentProject.path;
+      initialLoadDone.current = false;
+    }
+
     if (initialLoadDone.current) return;
     initialLoadDone.current = true;
 
-    loadClaudeConfig().then((nodes) => {
+    loadClaudeConfig(currentProject.path).then((nodes) => {
       if (nodes.length > 0) {
-        console.log(`Loaded ${nodes.length} nodes from .claude/`);
+        console.log(`Loaded ${nodes.length} nodes from ${currentProject.path}/.claude/`);
         mergeExistingConfig(nodes);
       }
     }).catch((err) => {
       console.error('Failed to load initial config:', err);
     });
-  }, [mergeExistingConfig]);
-
-  // Auto-open console when workflow starts running
-  useEffect(() => {
-    if (isRunning) {
-      setIsConsoleOpen(true);
-    }
-  }, [isRunning]);
+  }, [currentProject?.path, mergeExistingConfig, clearWorkflow]);
 
   return (
     <ReactFlowProvider>
-      <div className="flex flex-col h-screen bg-canvas">
+      <div className="flex flex-col h-screen bg-canvas overflow-hidden">
         {/* Header */}
         <Header />
 
         {/* Main Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Canvas Area */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             {/* Node Palette */}
             <NodePalette />
 
             {/* Flow Canvas */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-h-0">
               <FlowCanvas />
 
               {/* Prompt Bar (Floating) */}
@@ -66,40 +77,19 @@ export default function WorkflowBuilder() {
             </div>
           </div>
 
-          {/* Right Panel */}
+          {/* Right Sidebar */}
           {!isCollapsed && (
             <div
-              className="border-l border-border bg-surface"
+              className="border-l border-border bg-surface flex-shrink-0"
               style={{ width: `${width}px` }}
             >
-              <RightPanel />
+              <RightSidebar />
             </div>
           )}
         </div>
 
-        {/* Console Toggle Button */}
-        <button
-          onClick={() => setIsConsoleOpen(!isConsoleOpen)}
-          className={`fixed bottom-4 left-4 z-40 flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg transition-all ${
-            isConsoleOpen
-              ? 'bg-amber-600 text-white'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-          } ${isConsoleOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        >
-          <Terminal className="w-4 h-4" />
-          <span className="text-sm font-medium">Console</span>
-          {logs.length > 0 && !isConsoleOpen && (
-            <span className="px-1.5 py-0.5 text-xs bg-amber-500 text-white rounded-full">
-              {logs.length}
-            </span>
-          )}
-          {isRunning && (
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          )}
-        </button>
-
-        {/* Console Panel */}
-        <FloatingConsolePanel isOpen={isConsoleOpen} onClose={() => setIsConsoleOpen(false)} />
+        {/* Bottom Console Panel */}
+        <BottomConsolePanel />
       </div>
     </ReactFlowProvider>
   );

@@ -38,10 +38,14 @@ interface ClaudeConfig {
 
 /**
  * .claude/ 디렉토리에서 기존 설정 로드
+ * @param projectPath - 특정 프로젝트 경로 (없으면 기본 경로 사용)
  */
-export async function loadClaudeConfig(): Promise<WorkflowNode[]> {
+export async function loadClaudeConfig(projectPath?: string): Promise<WorkflowNode[]> {
   try {
-    const response = await fetch('/api/load/claude-config');
+    const url = projectPath
+      ? `/api/load/claude-config?path=${encodeURIComponent(projectPath)}`
+      : '/api/load/claude-config';
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to load config: ${response.statusText}`);
     }

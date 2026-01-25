@@ -40,20 +40,22 @@ export interface ClaudeConfig {
 }
 
 export class ConfigLoaderService {
-  private projectRoot: string;
+  private defaultProjectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.projectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
+    this.defaultProjectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
   }
 
   /**
    * .claude/ 디렉토리에서 모든 설정 로드
+   * @param projectPath - 특정 프로젝트 경로 (없으면 기본 경로 사용)
    */
-  async loadAll(): Promise<ClaudeConfig> {
+  async loadAll(projectPath?: string): Promise<ClaudeConfig> {
+    const targetRoot = projectPath || this.defaultProjectRoot;
     const [skills, agents, hooks] = await Promise.all([
-      this.loadSkills(),
-      this.loadAgents(),
-      this.loadHooks(),
+      this.loadSkills(targetRoot),
+      this.loadAgents(targetRoot),
+      this.loadHooks(targetRoot),
     ]);
 
     return { skills, agents, hooks };
@@ -61,9 +63,11 @@ export class ConfigLoaderService {
 
   /**
    * .claude/skills/ 에서 스킬 로드
+   * @param projectRoot - 프로젝트 루트 경로
    */
-  async loadSkills(): Promise<LoadedSkill[]> {
-    const skillsDir = path.join(this.projectRoot, '.claude', 'skills');
+  async loadSkills(projectRoot?: string): Promise<LoadedSkill[]> {
+    const targetRoot = projectRoot || this.defaultProjectRoot;
+    const skillsDir = path.join(targetRoot, '.claude', 'skills');
     const skills: LoadedSkill[] = [];
 
     try {
@@ -98,9 +102,11 @@ export class ConfigLoaderService {
 
   /**
    * .claude/agents/ 에서 에이전트 로드
+   * @param projectRoot - 프로젝트 루트 경로
    */
-  async loadAgents(): Promise<LoadedSubagent[]> {
-    const agentsDir = path.join(this.projectRoot, '.claude', 'agents');
+  async loadAgents(projectRoot?: string): Promise<LoadedSubagent[]> {
+    const targetRoot = projectRoot || this.defaultProjectRoot;
+    const agentsDir = path.join(targetRoot, '.claude', 'agents');
     const agents: LoadedSubagent[] = [];
 
     try {
@@ -138,9 +144,11 @@ export class ConfigLoaderService {
 
   /**
    * .claude/settings.json 에서 훅 로드
+   * @param projectRoot - 프로젝트 루트 경로
    */
-  async loadHooks(): Promise<LoadedHook[]> {
-    const settingsPath = path.join(this.projectRoot, '.claude', 'settings.json');
+  async loadHooks(projectRoot?: string): Promise<LoadedHook[]> {
+    const targetRoot = projectRoot || this.defaultProjectRoot;
+    const settingsPath = path.join(targetRoot, '.claude', 'settings.json');
     const hooks: LoadedHook[] = [];
 
     try {

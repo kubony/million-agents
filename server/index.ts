@@ -137,6 +137,53 @@ app.get('/api/makecc-home', (req, res) => {
   res.json({ path: projectService.getMakeccHome() });
 });
 
+// List files in a directory (for file explorer)
+app.get('/api/files', async (req, res) => {
+  try {
+    const makeccHome = projectService.getMakeccHome();
+    const requestedPath = (req.query.path as string) || makeccHome;
+
+    // Security: Only allow paths within makecc home
+    const normalizedPath = join(requestedPath);
+    if (!normalizedPath.startsWith(makeccHome)) {
+      return res.status(403).json({ message: 'Access denied: path outside makecc home' });
+    }
+
+    // Check if path exists
+    if (!existsSync(normalizedPath)) {
+      return res.status(404).json({ message: 'Path not found' });
+    }
+
+    const entries = await fs.readdir(normalizedPath, { withFileTypes: true });
+
+    // Filter and map entries
+    const items = entries
+      .filter((entry) => !entry.name.startsWith('.')) // Exclude hidden files
+      .map((entry) => ({
+        name: entry.name,
+        type: entry.isDirectory() ? 'folder' : 'file',
+        path: join(normalizedPath, entry.name),
+      }))
+      .sort((a, b) => {
+        // Folders first, then alphabetical
+        if (a.type !== b.type) {
+          return a.type === 'folder' ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+    res.json({
+      currentPath: normalizedPath,
+      parentPath: normalizedPath !== makeccHome ? dirname(normalizedPath) : null,
+      items,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('List files error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Save workflow as Claude Code configuration
 app.post('/api/save/workflow', async (req, res) => {
   try {
@@ -307,9 +354,11 @@ app.post('/api/generate/skill', async (req, res) => {
 // Load existing Claude config from .claude/ directory
 app.get('/api/load/claude-config', async (req, res) => {
   try {
-    const config = await configLoaderService.loadAll();
+    // 프로젝트 경로가 쿼리로 전달되면 해당 프로젝트의 설정을 로드
+    const projectPath = req.query.path as string | undefined;
+    const config = await configLoaderService.loadAll(projectPath);
     console.log(
-      `Loaded config: ${config.skills.length} skills, ${config.agents.length} agents, ${config.hooks.length} hooks`
+      `Loaded config from ${projectPath || 'default'}: ${config.skills.length} skills, ${config.agents.length} agents, ${config.hooks.length} hooks`
     );
     res.json(config);
   } catch (error) {
