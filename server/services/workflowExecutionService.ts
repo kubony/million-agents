@@ -1,8 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { skillExecutionService } from './skillExecutionService';
+import { executeClaudeCli, buildNodePrompt } from './claudeCliService';
 import type {
   ExecutionNode,
   SubagentNodeData,
@@ -40,17 +39,15 @@ type ProgressCallback = (update: NodeExecutionUpdate) => void;
 type LogCallback = (type: 'info' | 'warn' | 'error' | 'debug', message: string) => void;
 
 /**
- * Anthropic API를 사용한 워크플로우 실행 서비스
+ * Claude CLI를 사용한 워크플로우 실행 서비스
  */
 export class WorkflowExecutionService {
-  private client: Anthropic;
   private results: Map<string, ExecutionResult> = new Map();
   private outputDir: string = '';
+  private projectRoot: string = '';
 
   constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    this.projectRoot = process.env.MAKECC_PROJECT_PATH || process.cwd();
   }
 
   /**
@@ -150,7 +147,7 @@ export class WorkflowExecutionService {
   }
 
   /**
-   * Subagent 노드 실행 - Claude API로 작업 수행
+   * Subagent 노드 실행 - Claude CLI로 작업 수행
    */
   private async executeSubagentNode(
     node: ExecutionNode,
@@ -161,60 +158,39 @@ export class WorkflowExecutionService {
     const data = node.data as SubagentNodeData;
 
     onProgress?.({ nodeId: node.id, status: 'running', progress: 20 });
+    onLog?.('info', `claude -c 실행 중: ${data.label} (${data.role})`);
 
-    // 역할별 시스템 프롬프트
-    const rolePrompts: Record<string, string> = {
-      researcher: `당신은 전문 리서처입니다. 주어진 주제에 대해 깊이 있는 조사를 수행하고, 핵심 정보를 정리하여 제공합니다.`,
-      writer: `당신은 전문 작가입니다. 명확하고 매력적인 콘텐츠를 작성합니다. 사용자의 요구에 맞는 톤과 스타일로 글을 작성합니다.`,
-      analyst: `당신은 데이터 분석가입니다. 정보를 분석하고 패턴을 파악하여 인사이트를 도출합니다.`,
-      coder: `당신은 전문 개발자입니다. 깔끔하고 효율적인 코드를 작성하며, 모범 사례를 따릅니다.`,
-      designer: `당신은 디자인 전문가입니다. 상세페이지, 배너, UI 등을 위한 디자인 가이드와 컨셉을 제안합니다.`,
-      custom: `당신은 AI 어시스턴트입니다. 주어진 작업을 최선을 다해 수행합니다.`,
-    };
-
-    const systemPrompt = data.systemPrompt || rolePrompts[data.role] || rolePrompts.custom;
-
-    const userMessage = `## 작업 설명
-${data.description || '주어진 작업을 수행해주세요.'}
-
-## 이전 단계 결과
-${previousResults || '(없음)'}
-
-위 내용을 바탕으로 작업을 수행하고 결과를 제공해주세요.`;
-
-    onLog?.('debug', `Subagent "${data.label}" (${data.role}) 호출 중...`);
+    // 프롬프트 생성
+    const prompt = buildNodePrompt('subagent', data as unknown as Record<string, unknown>, previousResults);
 
     try {
       onProgress?.({ nodeId: node.id, status: 'running', progress: 40 });
 
-      const modelId = this.getModelId(data.model);
-
-      const response = await this.client.messages.create({
-        model: modelId,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: userMessage }
-        ],
+      const result = await executeClaudeCli({
+        prompt,
+        workingDirectory: this.projectRoot,
+        outputDirectory: this.outputDir,
+        timeoutMs: 300000, // 5분
       });
-
-      onProgress?.({ nodeId: node.id, status: 'running', progress: 80 });
-
-      // 응답 텍스트 추출
-      const resultText = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n');
 
       onProgress?.({ nodeId: node.id, status: 'running', progress: 100 });
 
-      return {
-        nodeId: node.id,
-        success: true,
-        result: resultText,
-      };
+      if (result.success) {
+        return {
+          nodeId: node.id,
+          success: true,
+          result: result.stdout,
+          files: result.generatedFiles,
+        };
+      } else {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: result.stderr || 'Claude CLI 실행 실패',
+        };
+      }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Claude API 호출 실패';
+      const errorMsg = error instanceof Error ? error.message : 'Claude CLI 호출 실패';
       onLog?.('error', `Subagent 오류: ${errorMsg}`);
       return {
         nodeId: node.id,
@@ -225,7 +201,7 @@ ${previousResults || '(없음)'}
   }
 
   /**
-   * Skill 노드 실행 - skillExecutionService 사용
+   * Skill 노드 실행 - Claude CLI로 스킬 실행
    */
   private async executeSkillNode(
     node: ExecutionNode,
@@ -237,25 +213,35 @@ ${previousResults || '(없음)'}
     const skillId = data.skillId || 'generic';
 
     onProgress?.({ nodeId: node.id, status: 'running', progress: 10 });
+    onLog?.('info', `claude -c 실행 중: /${skillId}`);
+
+    // 프롬프트 생성 - 스킬 호출 형태
+    const prompt = buildNodePrompt('skill', data as unknown as Record<string, unknown>, previousResults);
 
     try {
-      // skillExecutionService를 사용하여 실제 파일 생성
-      const result = await skillExecutionService.execute(
-        skillId,
-        previousResults,
-        this.outputDir,
-        onLog
-      );
+      const result = await executeClaudeCli({
+        prompt,
+        workingDirectory: this.projectRoot,
+        outputDirectory: this.outputDir,
+        timeoutMs: 300000,
+      });
 
       onProgress?.({ nodeId: node.id, status: 'running', progress: 100 });
 
-      return {
-        nodeId: node.id,
-        success: result.success,
-        result: result.result,
-        files: result.files,
-        error: result.error,
-      };
+      if (result.success) {
+        return {
+          nodeId: node.id,
+          success: true,
+          result: result.stdout,
+          files: result.generatedFiles,
+        };
+      } else {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: result.stderr || '스킬 실행 실패',
+        };
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '스킬 실행 실패';
       onLog?.('error', errorMsg);
@@ -268,7 +254,7 @@ ${previousResults || '(없음)'}
   }
 
   /**
-   * MCP 노드 실행 - 외부 도구/서비스 연결
+   * MCP 노드 실행 - Claude CLI로 MCP 서버 연동
    */
   private async executeMcpNode(
     node: ExecutionNode,
@@ -279,51 +265,46 @@ ${previousResults || '(없음)'}
     const data = node.data as McpNodeData;
 
     onProgress?.({ nodeId: node.id, status: 'running', progress: 10 });
-    onLog?.('info', `MCP 서버 "${data.serverName}" 연결 중...`);
+    onLog?.('info', `claude -c 실행 중: MCP 서버 "${data.serverName}"`);
 
-    // MCP 서버 타입별 처리
-    const mcpPrompt = `당신은 MCP (Model Context Protocol) 서버와 상호작용하는 전문가입니다.
+    const prompt = `MCP 서버를 사용하여 작업을 수행해주세요.
 
 ## MCP 서버 정보
 - 서버 이름: ${data.serverName}
 - 서버 타입: ${data.serverType}
-- 설정: ${JSON.stringify(data.serverConfig, null, 2)}
 
 ## 이전 단계 결과
-${previousResults}
+${previousResults || '(없음)'}
 
 ## 작업
-위 MCP 서버를 사용하여 이전 단계의 결과를 처리하세요.
-
-다음 MCP 서버 유형에 따라 적절한 작업을 수행하세요:
-- PostgreSQL/데이터베이스: 데이터 조회 또는 저장
-- Notion/Google Drive: 문서 생성 또는 업데이트
-- Slack/Discord: 메시지 전송 시뮬레이션
-- GitHub/Jira: 이슈 또는 PR 관련 작업 시뮬레이션
-
-작업 결과를 상세히 설명해주세요.`;
+위 MCP 서버를 사용하여 이전 단계의 결과를 처리하세요.`;
 
     try {
       onProgress?.({ nodeId: node.id, status: 'running', progress: 50 });
 
-      const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: mcpPrompt }],
+      const result = await executeClaudeCli({
+        prompt,
+        workingDirectory: this.projectRoot,
+        outputDirectory: this.outputDir,
+        timeoutMs: 300000,
       });
-
-      const result = response.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n');
 
       onProgress?.({ nodeId: node.id, status: 'running', progress: 100 });
 
-      return {
-        nodeId: node.id,
-        success: true,
-        result,
-      };
+      if (result.success) {
+        return {
+          nodeId: node.id,
+          success: true,
+          result: result.stdout,
+          files: result.generatedFiles,
+        };
+      } else {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: result.stderr || 'MCP 노드 실행 실패',
+        };
+      }
     } catch (error) {
       return {
         nodeId: node.id,
@@ -388,20 +369,6 @@ ${allFiles.map((f) => `- **${f.name}**: \`${f.path}\``).join('\n') || '없음'}
         result: previousResults,
         files: allFiles,
       };
-    }
-  }
-
-  /**
-   * 모델 ID 변환
-   */
-  private getModelId(model?: 'sonnet' | 'opus' | 'haiku'): string {
-    switch (model) {
-      case 'opus':
-        return 'claude-opus-4-20250514';
-      case 'haiku':
-        return 'claude-3-5-haiku-20241022';
-      default:
-        return 'claude-sonnet-4-20250514';
     }
   }
 
