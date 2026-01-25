@@ -4,6 +4,32 @@ import { useExecutionStore } from '../stores/executionStore';
 import { executeWorkflow } from '../services/localExecutor';
 import type { WorkflowResult } from '../services/socketService';
 
+// 워크플로우 결과를 로컬 프로젝트에 저장하는 API 호출
+async function saveWorkflowOutput(
+  workflowName: string,
+  files: Array<{ name: string; content: string }>
+): Promise<{ success: boolean; outputDir?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/save/workflow-output', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflowName, files }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return { success: false, error: error.message };
+    }
+
+    return await response.json();
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save files',
+    };
+  }
+}
+
 export function useWorkflowExecution() {
   const { nodes, edges, workflowName, updateNodeStatus } = useWorkflowStore();
   const {
@@ -18,7 +44,7 @@ export function useWorkflowExecution() {
     clearLogs,
   } = useExecutionStore();
 
-  const [generatedFiles, setGeneratedFiles] = useState<Array<{ name: string; content: string }>>([]);
+  const [savedOutputDir, setSavedOutputDir] = useState<string | null>(null);
 
   // Execute workflow locally (no server needed)
   const execute = useCallback(async () => {
@@ -30,7 +56,7 @@ export function useWorkflowExecution() {
     // Clear previous logs and start
     clearLogs();
     startExecution();
-    setGeneratedFiles([]);
+    setSavedOutputDir(null);
 
     addLog('info', `워크플로우 "${workflowName}" 실행 시작...`);
 
@@ -71,9 +97,9 @@ export function useWorkflowExecution() {
           result: resultText,
         });
 
-        // Generate downloadable file for output nodes
+        // Collect output node results for saving
         if (node?.type === 'output') {
-          const fileName = `${workflowName.replace(/\s+/g, '_')}_${node.data.label.replace(/\s+/g, '_')}.md`;
+          const fileName = `${node.data.label.replace(/\s+/g, '_')}.md`;
           files.push({
             name: fileName,
             content: resultText,
@@ -81,17 +107,25 @@ export function useWorkflowExecution() {
         }
       }
 
-      setGeneratedFiles(files);
       setWorkflowResults(workflowResults);
       stopExecution();
       addLog('success', '워크플로우 실행 완료!');
 
-      // Log generated files
+      // Save files to local project
       if (files.length > 0) {
-        addLog('info', `${files.length}개 파일 생성됨`);
-        files.forEach((file) => {
-          addLog('info', `  - ${file.name}`);
-        });
+        addLog('info', `${files.length}개 파일 저장 중...`);
+
+        const saveResult = await saveWorkflowOutput(workflowName, files);
+
+        if (saveResult.success && saveResult.outputDir) {
+          setSavedOutputDir(saveResult.outputDir);
+          addLog('info', `파일 저장 완료: ${saveResult.outputDir}`);
+          files.forEach((file) => {
+            addLog('info', `  - ${file.name}`);
+          });
+        } else {
+          addLog('error', `파일 저장 실패: ${saveResult.error}`);
+        }
       }
 
     } catch (error) {
@@ -101,32 +135,9 @@ export function useWorkflowExecution() {
     }
   }, [nodes, edges, workflowName, addLog, clearLogs, startExecution, stopExecution, updateNodeStatus, setCurrentNode, markNodeCompleted, markNodeFailed, setWorkflowResults]);
 
-  // Download a file
-  const downloadFile = useCallback((fileName: string, content: string) => {
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    addLog('info', `파일 다운로드: ${fileName}`);
-  }, [addLog]);
-
-  // Download all generated files
-  const downloadAllFiles = useCallback(() => {
-    generatedFiles.forEach((file) => {
-      downloadFile(file.name, file.content);
-    });
-  }, [generatedFiles, downloadFile]);
-
   return {
     isRunning,
     execute,
-    generatedFiles,
-    downloadFile,
-    downloadAllFiles,
+    savedOutputDir,
   };
 }

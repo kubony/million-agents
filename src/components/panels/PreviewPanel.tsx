@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Download,
+  FolderOpen,
   FileText,
   Eye,
   Play,
@@ -21,7 +21,7 @@ export default function PreviewPanel() {
   const { isRunning, results, workflowResults, logs } = useExecutionStore();
   const { nodes, selectedNodeId, updateNode } = useWorkflowStore();
   const selectedNode = useWorkflowStore(selectSelectedNode);
-  const { execute, generatedFiles, downloadFile, downloadAllFiles } = useWorkflowExecution();
+  const { execute, savedOutputDir } = useWorkflowExecution();
 
   // Local state for input value during editing
   const [inputValue, setInputValue] = useState('');
@@ -177,38 +177,14 @@ export default function PreviewPanel() {
           </div>
         )}
 
-        {/* Generated Files - Download Section */}
-        {generatedFiles.length > 0 && (
+        {/* Saved Output Directory */}
+        {savedOutputDir && (
           <div className="mb-4 p-4 bg-green-900/20 border border-green-700 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-medium text-green-300">생성된 파일</h4>
-              <button
-                onClick={downloadAllFiles}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-              >
-                <Download className="w-3 h-3" />
-                전체 다운로드
-              </button>
+            <div className="flex items-center gap-2 mb-2">
+              <FolderOpen className="w-5 h-5 text-green-400" />
+              <h4 className="text-sm font-medium text-green-300">파일 저장 완료</h4>
             </div>
-            <div className="space-y-2">
-              {generatedFiles.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-2 bg-surface rounded"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm text-white">{file.name}</span>
-                  </div>
-                  <button
-                    onClick={() => downloadFile(file.name, file.content)}
-                    className="p-1 hover:bg-surface-hover rounded transition-colors"
-                  >
-                    <Download className="w-4 h-4 text-gray-400" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-gray-400 break-all">{savedOutputDir}</p>
           </div>
         )}
 
@@ -318,19 +294,6 @@ export default function PreviewPanel() {
         )}
       </div>
 
-      {/* Download Actions */}
-      {(lastResult || generatedFiles.length > 0) && (
-        <div className="flex items-center gap-2 p-4 border-t border-border">
-          <button
-            onClick={downloadAllFiles}
-            disabled={generatedFiles.length === 0}
-            className="flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-lg text-sm hover:bg-border transition-colors disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Download .md
-          </button>
-        </div>
-      )}
     </div>
   );
 }

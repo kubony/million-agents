@@ -2,8 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import type { ApiSettings } from './workflowAIService';
+import { claudeMdService } from './claudeMdService';
 
 export interface GeneratedSkill {
   skillName: string;
@@ -82,7 +83,7 @@ description: One line description
 
 ## Usage
 \`\`\`bash
-~/.claude/venv/bin/python ~/.claude/skills/skill-id/scripts/main.py [args]
+.venv/bin/python .claude/skills/skill-id/scripts/main.py [args]
 \`\`\`
 
 ## Parameters
@@ -95,7 +96,7 @@ RULES:
 1. Generate COMPLETE, WORKING code - no placeholders
 2. Include proper error handling with try-except
 3. Use Korean for user-facing messages
-4. Scripts run with ~/.claude/venv/bin/python
+4. Scripts run with .venv/bin/python (project local virtual environment)
 5. List all required packages in requirements.txt
 6. RESPOND WITH JSON ONLY - NO OTHER TEXT`;
 
@@ -163,9 +164,21 @@ export class SkillGeneratorService {
       detail: '어떤 스킬이 필요한지 파악 중...',
     });
 
+    // CLAUDE.md 내용 읽기
+    let claudeMdContext = '';
+    const claudeMdContent = await claudeMdService.read();
+    if (claudeMdContent) {
+      claudeMdContext = `\n\n<project_context>
+The following is the project's CLAUDE.md file. Follow these guidelines when generating the skill:
+
+${claudeMdContent}
+</project_context>`;
+      console.log('Including CLAUDE.md in API context');
+    }
+
     const userPrompt = `Create a skill for: "${prompt}"
 
-Generate complete, working code. Respond with JSON only.`;
+Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
 
     try {
       progress({
@@ -301,41 +314,42 @@ Generate complete, working code. Respond with JSON only.`;
     progress: SkillProgressCallback
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const venvPythonPath = path.join(homeDir, '.claude', 'venv', 'bin', 'python');
+      // 로컬 프로젝트의 .venv 사용
+      const localVenvPythonPath = path.join(this.projectRoot, '.venv', 'bin', 'python');
+      const localVenvPipPath = path.join(this.projectRoot, '.venv', 'bin', 'pip');
 
       let command: string;
       let args: string[];
 
       // uv를 우선 사용 (10-100x 빠름)
-      // uv pip install --python <venv-python> -r requirements.txt
       const useUv = this.checkCommandExists('uv');
 
-      if (useUv && existsSync(venvPythonPath)) {
+      if (useUv && existsSync(localVenvPythonPath)) {
         command = 'uv';
-        args = ['pip', 'install', '--python', venvPythonPath, '-r', requirementsPath];
+        args = ['pip', 'install', '--python', localVenvPythonPath, '-r', requirementsPath];
         progress({
           step: 'installing',
           message: '⚡ uv로 패키지 설치 중 (고속)',
-          detail: 'uv pip install 실행 중...',
+          detail: 'uv pip install → .venv/',
         });
-      } else if (existsSync(path.join(homeDir, '.claude', 'venv', 'bin', 'pip'))) {
-        // fallback: 전역 venv pip 사용
-        command = path.join(homeDir, '.claude', 'venv', 'bin', 'pip');
+      } else if (existsSync(localVenvPipPath)) {
+        // fallback: 로컬 venv pip 사용
+        command = localVenvPipPath;
         args = ['install', '-r', requirementsPath];
         progress({
           step: 'installing',
           message: '📦 pip으로 패키지 설치 중',
-          detail: 'pip install 실행 중...',
+          detail: 'pip install → .venv/',
         });
       } else {
-        // fallback: 시스템 pip 사용
+        // fallback: 시스템 pip 사용 (경고)
+        console.warn('Warning: .venv not found, using system pip');
         command = 'pip3';
         args = ['install', '-r', requirementsPath];
         progress({
           step: 'installing',
-          message: '📦 pip으로 패키지 설치 중',
-          detail: 'pip install 실행 중...',
+          message: '⚠️ 시스템 pip 사용 중',
+          detail: '.venv가 없어 시스템 pip 사용',
         });
       }
 

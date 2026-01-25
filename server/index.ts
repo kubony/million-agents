@@ -26,6 +26,7 @@ import { nodeSyncService } from './services/nodeSyncService';
 import { configLoaderService } from './services/configLoaderService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
+import { claudeMdService } from './services/claudeMdService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
@@ -305,10 +306,9 @@ app.post('/api/skill/test', async (req, res) => {
       return res.status(404).json({ message: 'main.py not found' });
     }
 
-    // 전역 venv의 python 사용
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    const pythonPath = join(homeDir, '.claude', 'venv', 'bin', 'python');
-    const command = existsSync(pythonPath) ? pythonPath : 'python3';
+    // 로컬 프로젝트의 .venv 사용
+    const localPythonPath = join(projectRoot, '.venv', 'bin', 'python');
+    const command = existsSync(localPythonPath) ? localPythonPath : 'python3';
 
     console.log(`Testing skill: ${command} ${mainPyPath}`);
 
@@ -351,6 +351,45 @@ app.post('/api/skill/test', async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Skill test error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Save workflow output to local project
+app.post('/api/save/workflow-output', async (req, res) => {
+  try {
+    const { workflowName, files } = req.body as {
+      workflowName: string;
+      files: Array<{ name: string; content: string }>;
+    };
+
+    if (!workflowName || !files || files.length === 0) {
+      return res.status(400).json({ message: 'Workflow name and files are required' });
+    }
+
+    // output/워크플로우명/ 폴더 생성
+    const sanitizedName = workflowName.replace(/[/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_');
+    const outputDir = join(fileService.getProjectPath(), 'output', sanitizedName);
+
+    await fs.mkdir(outputDir, { recursive: true });
+
+    const savedFiles: Array<{ name: string; path: string }> = [];
+
+    for (const file of files) {
+      const filePath = join(outputDir, file.name);
+      await fs.writeFile(filePath, file.content, 'utf-8');
+      savedFiles.push({ name: file.name, path: filePath });
+      console.log(`Saved workflow output: ${filePath}`);
+    }
+
+    res.json({
+      success: true,
+      outputDir,
+      files: savedFiles,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Save workflow output error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });
@@ -592,6 +631,19 @@ if (isProduction) {
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// 서버 시작 시 프로젝트 초기화
+async function startServer() {
+  try {
+    // CLAUDE.md, .venv, uv 초기화
+    await claudeMdService.setup();
+  } catch (error) {
+    console.error('Project setup warning:', error);
+    // 초기화 실패해도 서버는 시작
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
