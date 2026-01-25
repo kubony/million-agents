@@ -50,6 +50,7 @@ export type SkillProgressStep =
   | 'designing'
   | 'generating'
   | 'saving'
+  | 'installing'
   | 'completed'
   | 'error';
 

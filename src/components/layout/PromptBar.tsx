@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Send, Loader2, CheckCircle } from 'lucide-react';
+import { nanoid } from 'nanoid';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { usePanelStore } from '../../stores/panelStore';
 import { useExecutionStore } from '../../stores/executionStore';
@@ -12,6 +13,7 @@ import {
   type SkillCompletedData,
   type SkillErrorData,
 } from '../../services/socketService';
+import type { SkillNode } from '../../types/nodes';
 
 export default function PromptBar() {
   const [prompt, setPrompt] = useState('');
@@ -19,8 +21,8 @@ export default function PromptBar() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [generatingType, setGeneratingType] = useState<'skill' | 'workflow'>('workflow');
-  const { loadWorkflow } = useWorkflowStore();
-  const { openConsolePanel } = usePanelStore();
+  const { loadWorkflow, addNode, setSelectedNode, nodes } = useWorkflowStore();
+  const { openConsolePanel, openStepPanel } = usePanelStore();
   const { addLog, clearLogs } = useExecutionStore();
   const { apiMode, apiKey, proxyUrl } = useSettingsStore();
 
@@ -37,7 +39,30 @@ export default function PromptBar() {
     setSuccessMessage(`스킬 "${data.skill.skillName}"이 ${data.savedPath}에 저장되었습니다!`);
     setPrompt('');
     setTimeout(() => setSuccessMessage(null), 5000);
-  }, []);
+
+    // 캔버스에 스킬 노드 추가
+    const nodeId = nanoid();
+    const existingNodes = nodes.length;
+    const newNode: SkillNode = {
+      id: nodeId,
+      type: 'skill',
+      position: {
+        x: 100 + (existingNodes % 3) * 300,
+        y: 100 + Math.floor(existingNodes / 3) * 200,
+      },
+      data: {
+        label: data.skill.skillName,
+        description: data.skill.description,
+        status: 'idle',
+        skillType: 'generated',
+        skillId: data.skill.skillId,
+        skillPath: data.savedPath,
+      },
+    };
+    addNode(newNode);
+    setSelectedNode(nodeId);
+    openStepPanel();
+  }, [nodes, addNode, setSelectedNode, openStepPanel]);
 
   const handleSkillError = useCallback((data: SkillErrorData) => {
     setIsGenerating(false);

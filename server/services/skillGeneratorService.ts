@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { existsSync } from 'fs';
+import { spawn } from 'child_process';
 import type { ApiSettings } from './workflowAIService';
 
 export interface GeneratedSkill {
@@ -27,6 +29,7 @@ export type SkillProgressStep =
   | 'designing'
   | 'generating'
   | 'saving'
+  | 'installing'
   | 'completed'
   | 'error';
 
@@ -212,6 +215,28 @@ Generate complete, working code. Respond with JSON only.`;
       const skillPath = path.join(this.projectRoot, '.claude', 'skills', skill.skillId);
       await this.saveSkillFiles(skillPath, skill.files);
 
+      // requirements.txt가 있으면 의존성 설치
+      const requirementsPath = path.join(skillPath, 'requirements.txt');
+      if (existsSync(requirementsPath)) {
+        progress({
+          step: 'installing',
+          message: '📦 패키지를 설치하고 있어요',
+          detail: 'pip install 실행 중...',
+        });
+
+        try {
+          await this.installDependencies(requirementsPath, progress);
+        } catch (installError) {
+          // 설치 실패해도 스킬 생성은 성공으로 처리
+          console.error('Dependency installation failed:', installError);
+          progress({
+            step: 'installing',
+            message: '⚠️ 일부 패키지 설치에 실패했어요',
+            detail: '나중에 수동으로 설치해주세요',
+          });
+        }
+      }
+
       progress({
         step: 'completed',
         message: '✅ 스킬이 생성되었습니다!',
@@ -253,6 +278,76 @@ Generate complete, working code. Respond with JSON only.`;
       await fs.writeFile(filePath, file.content, 'utf-8');
       console.log(`Saved: ${filePath}`);
     }
+  }
+
+  private async installDependencies(
+    requirementsPath: string,
+    progress: SkillProgressCallback
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // 전역 venv의 pip 사용
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const pipPath = path.join(homeDir, '.claude', 'venv', 'bin', 'pip');
+
+      let command: string;
+      let args: string[];
+
+      if (existsSync(pipPath)) {
+        // 전역 venv pip 사용
+        command = pipPath;
+        args = ['install', '-r', requirementsPath];
+      } else {
+        // 시스템 pip 사용
+        command = 'pip3';
+        args = ['install', '-r', requirementsPath];
+      }
+
+      console.log(`Installing dependencies: ${command} ${args.join(' ')}`);
+
+      const proc = spawn(command, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      proc.stdout?.on('data', (data) => {
+        output += data.toString();
+        const lines = data.toString().trim().split('\n');
+        for (const line of lines) {
+          if (line.includes('Successfully installed') || line.includes('Requirement already satisfied')) {
+            progress({
+              step: 'installing',
+              message: '📦 패키지 설치 중',
+              detail: line.slice(0, 60) + (line.length > 60 ? '...' : ''),
+            });
+          }
+        }
+      });
+
+      proc.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          progress({
+            step: 'installing',
+            message: '✅ 패키지 설치 완료',
+            detail: '모든 의존성이 설치되었습니다',
+          });
+          resolve();
+        } else {
+          console.error('pip install failed:', errorOutput);
+          reject(new Error(`pip install failed with code ${code}`));
+        }
+      });
+
+      proc.on('error', (err) => {
+        console.error('Failed to start pip:', err);
+        reject(err);
+      });
+    });
   }
 }
 

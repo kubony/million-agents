@@ -1,4 +1,5 @@
-import { Trash2, Sparkles, MessageSquare, Zap, Terminal, Anchor, BarChart3, Settings2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trash2, Sparkles, MessageSquare, Zap, Terminal, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import type { WorkflowNode, SubagentNodeData, InputNodeData, SkillNodeData, CommandNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
@@ -301,6 +302,22 @@ function SubagentSettings({
   );
 }
 
+// Skill file type
+interface SkillFile {
+  name: string;
+  content: string;
+  language: string;
+}
+
+// Skill test result type
+interface SkillTestResult {
+  success: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
 // Skill-specific settings
 function SkillSettings({
   data,
@@ -309,6 +326,60 @@ function SkillSettings({
   data: SkillNodeData;
   onUpdate: (data: Partial<SkillNodeData>) => void;
 }) {
+  const [files, setFiles] = useState<SkillFile[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [testArgs, setTestArgs] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<SkillTestResult | null>(null);
+
+  // 생성된 스킬인 경우 파일 불러오기
+  useEffect(() => {
+    if (data.skillType === 'generated' && data.skillPath) {
+      setLoading(true);
+      fetch(`/api/skill/files?path=${encodeURIComponent(data.skillPath)}`)
+        .then((res) => res.json())
+        .then((result) => {
+          setFiles(result.files || []);
+          // 첫 번째 파일 자동 확장
+          if (result.files?.length > 0) {
+            setExpandedFile(result.files[0].name);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load skill files:', err);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [data.skillPath, data.skillType]);
+
+  // 스킬 테스트 실행
+  const runTest = async () => {
+    if (!data.skillPath) return;
+
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const args = testArgs.trim() ? testArgs.trim().split(/\s+/) : [];
+      const response = await fetch('/api/skill/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillPath: data.skillPath, args }),
+      });
+
+      const result = await response.json();
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const skillOptions = [
     { id: 'ppt-generator', name: 'PPT Generator', description: 'Create PowerPoint presentations' },
     { id: 'image-gen-nanobanana', name: 'Image Generator', description: 'Generate images with AI' },
@@ -317,6 +388,157 @@ function SkillSettings({
     { id: 'docx', name: 'Word Processor', description: 'Create and edit documents' },
   ];
 
+  // 생성된 스킬인 경우 미리보기 UI
+  if (data.skillType === 'generated' && data.skillPath) {
+    return (
+      <>
+        {/* 스킬 경로 */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+            Skill Path
+          </label>
+          <div className="px-3 py-2 bg-surface border border-border rounded-lg text-gray-400 text-sm font-mono break-all">
+            {data.skillPath}
+          </div>
+        </div>
+
+        {/* 파일 미리보기 */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+            <FileCode className="w-4 h-4 inline mr-1" />
+            Files Preview
+          </label>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-gray-500">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              파일 로딩 중...
+            </div>
+          ) : files.length === 0 ? (
+            <div className="text-center py-4 text-gray-500 text-sm">
+              파일을 찾을 수 없습니다
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {files.map((file) => (
+                <div key={file.name} className="border border-border rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setExpandedFile(expandedFile === file.name ? null : file.name)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-surface-hover hover:bg-border transition-colors"
+                  >
+                    <span className="text-sm text-white font-medium">{file.name}</span>
+                    {expandedFile === file.name ? (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                  {expandedFile === file.name && (
+                    <pre className="p-3 bg-[#0d1117] text-xs text-gray-300 overflow-x-auto max-h-64 overflow-y-auto font-mono">
+                      {file.content}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 테스트 실행 */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+            <Play className="w-4 h-4 inline mr-1" />
+            Test Skill
+          </label>
+
+          <div className="space-y-3">
+            {/* 인자 입력 */}
+            <div>
+              <input
+                type="text"
+                value={testArgs}
+                onChange={(e) => setTestArgs(e.target.value)}
+                placeholder="Arguments (optional, space-separated)"
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+
+            {/* 실행 버튼 */}
+            <button
+              onClick={runTest}
+              disabled={testing}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                testing
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+              }`}
+            >
+              {testing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  실행 중...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  테스트 실행
+                </>
+              )}
+            </button>
+
+            {/* 결과 표시 */}
+            {testResult && (
+              <div className={`p-3 rounded-lg border ${
+                testResult.success
+                  ? 'bg-green-500/10 border-green-500/30'
+                  : 'bg-red-500/10 border-red-500/30'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {testResult.success ? (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-400" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    testResult.success ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {testResult.success ? '성공' : '실패'}
+                    {testResult.exitCode !== undefined && ` (exit code: ${testResult.exitCode})`}
+                  </span>
+                </div>
+
+                {testResult.stdout && (
+                  <div className="mb-2">
+                    <div className="text-xs text-gray-500 mb-1">Output:</div>
+                    <pre className="p-2 bg-black/30 rounded text-xs text-gray-300 overflow-x-auto max-h-32 overflow-y-auto font-mono whitespace-pre-wrap">
+                      {testResult.stdout}
+                    </pre>
+                  </div>
+                )}
+
+                {testResult.stderr && (
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Error:</div>
+                    <pre className="p-2 bg-black/30 rounded text-xs text-red-400 overflow-x-auto max-h-32 overflow-y-auto font-mono whitespace-pre-wrap">
+                      {testResult.stderr}
+                    </pre>
+                  </div>
+                )}
+
+                {testResult.error && (
+                  <div className="text-sm text-red-400">
+                    {testResult.error}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // 일반 스킬 선택 UI
   return (
     <>
       <div>
