@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -6,6 +6,18 @@ import cors from 'cors';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, promises as fs } from 'fs';
+
+// 프로젝트 경로의 .env 파일을 명시적으로 로드
+// npx makecc 실행 시 MAKECC_PROJECT_PATH가 사용자 프로젝트 경로를 가리킴
+const projectPath = process.env.MAKECC_PROJECT_PATH || process.cwd();
+const envPath = join(projectPath, '.env');
+if (existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+  console.log(`Loaded .env from: ${envPath}`);
+} else {
+  // 폴백: 현재 디렉토리에서 로드 시도
+  dotenv.config();
+}
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';

@@ -19,7 +19,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       apiMode: 'proxy',
       apiKey: '',
-      proxyUrl: 'https://api.anthropic.com',
+      proxyUrl: 'https://makecc-proxy.vercel.app',
 
       setApiMode: (mode) => set({ apiMode: mode }),
       setApiKey: (key) => set({ apiKey: key }),

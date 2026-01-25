@@ -107,23 +107,39 @@ export class SkillGeneratorService {
   }
 
   private getClient(settings?: ApiSettings): Anthropic {
-    if (settings?.apiMode === 'direct' && settings.apiKey) {
-      return new Anthropic({ apiKey: settings.apiKey });
-    }
+    const DEFAULT_ANTHROPIC_URL = 'https://api.anthropic.com';
 
-    if (settings?.apiMode === 'proxy' && settings.proxyUrl) {
+    // 1. 프록시 우선: proxyUrl이 설정되어 있고, 기본 Anthropic URL이 아닌 경우
+    //    프록시 서버가 API 키를 관리하므로 클라이언트는 키 불필요
+    if (settings?.proxyUrl && settings.proxyUrl !== DEFAULT_ANTHROPIC_URL) {
+      console.log(`Using proxy server: ${settings.proxyUrl}`);
       return new Anthropic({
         baseURL: settings.proxyUrl,
-        apiKey: process.env.ANTHROPIC_API_KEY || 'proxy-mode',
+        apiKey: 'proxy-mode', // 프록시 서버가 실제 키를 관리
       });
     }
 
+    // 2. 환경변수에 API 키가 있으면 직접 호출
     const envApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!envApiKey) {
-      throw new Error('API 키가 설정되지 않았습니다. 설정에서 API 키를 입력하세요.');
+    if (envApiKey) {
+      console.log('Using API key from environment variable');
+      return new Anthropic({ apiKey: envApiKey });
     }
 
-    return new Anthropic({ apiKey: envApiKey });
+    // 3. UI에서 direct 모드로 API 키를 직접 입력한 경우
+    if (settings?.apiMode === 'direct' && settings.apiKey) {
+      console.log('Using API key from UI settings');
+      return new Anthropic({ apiKey: settings.apiKey });
+    }
+
+    // 4. 아무것도 없으면 에러
+    throw new Error(
+      'API 키가 설정되지 않았습니다.\n' +
+      '해결 방법:\n' +
+      '1. 프록시 서버 URL을 설정하거나\n' +
+      '2. 프로젝트 .env 파일에 ANTHROPIC_API_KEY를 추가하거나\n' +
+      '3. 설정에서 Direct 모드로 API 키를 직접 입력하세요.'
+    );
   }
 
   async generate(
