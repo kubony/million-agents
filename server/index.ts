@@ -242,8 +242,7 @@ app.get('/api/load/claude-config', async (req, res) => {
   try {
     const config = await configLoaderService.loadAll();
     console.log(
-      `Loaded config: ${config.skills.length} skills, ${config.agents.length} agents, ` +
-      `${config.commands.length} commands, ${config.hooks.length} hooks`
+      `Loaded config: ${config.skills.length} skills, ${config.agents.length} agents, ${config.hooks.length} hooks`
     );
     res.json(config);
   } catch (error) {

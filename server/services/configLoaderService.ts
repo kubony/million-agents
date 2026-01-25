@@ -21,15 +21,6 @@ interface LoadedSubagent {
   systemPrompt: string;
 }
 
-interface LoadedCommand {
-  id: string;
-  type: 'command';
-  label: string;
-  description: string;
-  commandName: string;
-  commandContent: string;
-}
-
 interface LoadedHook {
   id: string;
   type: 'hook';
@@ -40,12 +31,11 @@ interface LoadedHook {
   hookCommand: string;
 }
 
-export type LoadedNode = LoadedSkill | LoadedSubagent | LoadedCommand | LoadedHook;
+export type LoadedNode = LoadedSkill | LoadedSubagent | LoadedHook;
 
 export interface ClaudeConfig {
   skills: LoadedSkill[];
   agents: LoadedSubagent[];
-  commands: LoadedCommand[];
   hooks: LoadedHook[];
 }
 
@@ -60,14 +50,13 @@ export class ConfigLoaderService {
    * .claude/ 디렉토리에서 모든 설정 로드
    */
   async loadAll(): Promise<ClaudeConfig> {
-    const [skills, agents, commands, hooks] = await Promise.all([
+    const [skills, agents, hooks] = await Promise.all([
       this.loadSkills(),
-      this.loadSubagents(),
-      this.loadCommands(),
+      this.loadAgents(),
       this.loadHooks(),
     ]);
 
-    return { skills, agents, commands, hooks };
+    return { skills, agents, hooks };
   }
 
   /**
@@ -108,9 +97,9 @@ export class ConfigLoaderService {
   }
 
   /**
-   * .claude/agents/ 에서 서브에이전트 로드
+   * .claude/agents/ 에서 에이전트 로드
    */
-  async loadSubagents(): Promise<LoadedSubagent[]> {
+  async loadAgents(): Promise<LoadedSubagent[]> {
     const agentsDir = path.join(this.projectRoot, '.claude', 'agents');
     const agents: LoadedSubagent[] = [];
 
@@ -145,44 +134,6 @@ export class ConfigLoaderService {
     }
 
     return agents;
-  }
-
-  /**
-   * .claude/commands/ 에서 커맨드 로드
-   */
-  async loadCommands(): Promise<LoadedCommand[]> {
-    const commandsDir = path.join(this.projectRoot, '.claude', 'commands');
-    const commands: LoadedCommand[] = [];
-
-    try {
-      const entries = await fs.readdir(commandsDir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith('.md')) {
-          const cmdPath = path.join(commandsDir, entry.name);
-          try {
-            const content = await fs.readFile(cmdPath, 'utf-8');
-            const parsed = this.parseFrontmatter(content);
-            const cmdName = entry.name.replace('.md', '');
-
-            commands.push({
-              id: `command-${cmdName}`,
-              type: 'command',
-              label: parsed.frontmatter.name || cmdName,
-              description: parsed.frontmatter.description || '',
-              commandName: cmdName,
-              commandContent: content,
-            });
-          } catch {
-            // 읽을 수 없으면 스킵
-          }
-        }
-      }
-    } catch {
-      // commands 디렉토리가 없으면 빈 배열 반환
-    }
-
-    return commands;
   }
 
   /**
