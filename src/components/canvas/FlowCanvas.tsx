@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -10,6 +10,7 @@ import {
   type Node,
   type NodeChange,
   type EdgeChange,
+  type OnSelectionChangeFunc,
   applyNodeChanges,
   applyEdgeChanges,
   BackgroundVariant,
@@ -47,6 +48,98 @@ export default function FlowCanvas() {
   } = useWorkflowStore();
 
   const openStepPanel = usePanelStore((state) => state.openStepPanel);
+
+  // Track if Shift key is pressed for auto-connect feature
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+  // Track the last selection to detect new selections
+  const lastSelectionRef = useRef<string[]>([]);
+
+  // Listen for Shift key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false);
+        lastSelectionRef.current = [];
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Handle selection change for Shift+select auto-connect
+  const onSelectionChange: OnSelectionChangeFunc = useCallback(
+    ({ nodes: selectedNodes }) => {
+      if (!isShiftPressed) {
+        lastSelectionRef.current = [];
+        return;
+      }
+
+      const selectedIds = selectedNodes.map(n => n.id);
+
+      // When exactly 2 nodes are selected with Shift
+      if (selectedIds.length === 2) {
+        const [firstId, secondId] = selectedIds;
+
+        // Check if already connected
+        const alreadyConnected = edges.some(
+          e => (e.source === firstId && e.target === secondId) ||
+               (e.source === secondId && e.target === firstId)
+        );
+
+        if (!alreadyConnected) {
+          // Determine source and target based on node positions (left to right)
+          const node1 = nodes.find(n => n.id === firstId);
+          const node2 = nodes.find(n => n.id === secondId);
+
+          if (node1 && node2) {
+            let source = firstId;
+            let target = secondId;
+
+            // If node1 is to the right of node2, swap them
+            if ((node1.position?.x ?? 0) > (node2.position?.x ?? 0)) {
+              source = secondId;
+              target = firstId;
+            }
+
+            // Validate the connection
+            const connection = { source, target, sourceHandle: null, targetHandle: null };
+
+            if (validateConnection(connection, nodes as Node[])) {
+              const newEdge: WorkflowEdge = {
+                id: `e-${source}-${target}`,
+                source,
+                target,
+                animated: true,
+              };
+
+              setEdges(addEdge({ ...connection, animated: true }, edges));
+              storeAddEdge(newEdge);
+
+              // Sync edge to filesystem
+              syncEdge(newEdge, nodes as WorkflowNode[]).catch(err => {
+                console.error('Failed to sync edge to filesystem:', err);
+              });
+            }
+          }
+        }
+      }
+
+      lastSelectionRef.current = selectedIds;
+    },
+    [isShiftPressed, nodes, edges, setEdges, storeAddEdge]
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -128,6 +221,7 @@ export default function FlowCanvas() {
       onNodesChange={handleNodesChange}
       onEdgesChange={handleEdgesChange}
       onConnect={onConnect}
+      onSelectionChange={onSelectionChange}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}
@@ -141,6 +235,8 @@ export default function FlowCanvas() {
       snapGrid={[15, 15]}
       connectionRadius={40}
       connectOnClick={true}
+      selectionOnDrag={false}
+      multiSelectionKeyCode="Shift"
     >
       <Background
         variant={BackgroundVariant.Dots}
