@@ -67,10 +67,18 @@ export class NodeSyncService {
   }
 
   /**
-   * 노드 삭제 시 파일 삭제
+   * 노드 삭제 시 파일 삭제 및 관련 참조 정리
    */
-  async deleteNode(node: NodeData): Promise<{ success: boolean; error?: string }> {
+  async deleteNode(node: NodeData, allNodes?: NodeData[]): Promise<{ success: boolean; error?: string }> {
     try {
+      const nodeId = this.getNodeIdentifier(node);
+
+      // 먼저 관련 노드들에서 참조 제거
+      if (allNodes) {
+        await this.removeReferencesToNode(nodeId, node.type, allNodes);
+      }
+
+      // 파일 삭제
       switch (node.type) {
         case 'skill':
           if (node.skillId) {
@@ -96,6 +104,36 @@ export class NodeSyncService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * 삭제되는 노드에 대한 모든 참조를 관련 노드에서 제거
+   */
+  private async removeReferencesToNode(nodeId: string, nodeType: string, allNodes: NodeData[]): Promise<void> {
+    for (const relatedNode of allNodes) {
+      if (relatedNode.type === 'subagent') {
+        // 서브에이전트의 skills 배열에서 삭제된 노드 제거
+        if (relatedNode.skills?.includes(nodeId)) {
+          relatedNode.skills = relatedNode.skills.filter(s => s !== nodeId);
+          await this.syncSubagentNode(relatedNode);
+        }
+      } else if (relatedNode.type === 'skill') {
+        let updated = false;
+        // 스킬의 upstream에서 삭제된 노드 제거
+        if (relatedNode.upstream?.includes(nodeId)) {
+          relatedNode.upstream = relatedNode.upstream.filter(s => s !== nodeId);
+          updated = true;
+        }
+        // 스킬의 downstream에서 삭제된 노드 제거
+        if (relatedNode.downstream?.includes(nodeId)) {
+          relatedNode.downstream = relatedNode.downstream.filter(s => s !== nodeId);
+          updated = true;
+        }
+        if (updated) {
+          await this.syncSkillNode(relatedNode);
+        }
+      }
     }
   }
 
@@ -326,10 +364,24 @@ ${frontmatterStr}
 
     await fs.mkdir(agentsDir, { recursive: true });
 
-    // Frontmatter 구성
+    // 기존 파일 읽기 시도
+    let existingContent = '';
+    let existingFrontmatter: Record<string, string> = {};
+    let existingBody = '';
+    try {
+      existingContent = await fs.readFile(agentPath, 'utf-8');
+      const parsed = this.parseFrontmatter(existingContent);
+      existingFrontmatter = parsed.frontmatter;
+      existingBody = parsed.body;
+    } catch {
+      // 파일 없음 - 새로 생성
+    }
+
+    // Frontmatter 구성 - 기존 값 유지하면서 업데이트
     const frontmatter: Record<string, string> = {
+      ...existingFrontmatter,
       name: agentName,
-      description: node.description || node.label,
+      description: node.description || existingFrontmatter.description || node.label,
     };
 
     if (node.tools && node.tools.length > 0) {
@@ -340,26 +392,58 @@ ${frontmatterStr}
       frontmatter.model = node.model;
     }
 
+    // skills 필드 처리 - 기존 값과 새 값 병합
     if (node.skills && node.skills.length > 0) {
       frontmatter.skills = node.skills.join(', ');
+    } else if (node.skills && node.skills.length === 0) {
+      // 명시적으로 빈 배열이면 skills 제거
+      delete frontmatter.skills;
     }
 
     const frontmatterStr = Object.entries(frontmatter)
       .map(([key, value]) => `${key}: ${value}`)
       .join('\n');
 
+    // body 처리 - systemPrompt가 명시되면 교체, 아니면 기존 유지
+    const body = node.systemPrompt || existingBody || `You are ${node.label}.
+
+${node.description || ''}
+`;
+
     const content = `---
 ${frontmatterStr}
 ---
 
-${node.systemPrompt || `You are ${node.label}.
-
-${node.description || ''}
-`}
+${body}
 `;
 
     await fs.writeFile(agentPath, content, 'utf-8');
     return { success: true, path: agentPath };
+  }
+
+  /**
+   * Frontmatter 파싱
+   */
+  private parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
+    const frontmatter: Record<string, string> = {};
+    let body = content;
+
+    const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+    if (match) {
+      const fmContent = match[1];
+      body = match[2].trim();
+
+      for (const line of fmContent.split('\n')) {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+          const key = line.slice(0, colonIndex).trim();
+          const value = line.slice(colonIndex + 1).trim();
+          frontmatter[key] = value;
+        }
+      }
+    }
+
+    return { frontmatter, body };
   }
 
   private async syncCommandNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {

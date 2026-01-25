@@ -146,12 +146,12 @@ app.post('/api/sync/node', async (req, res) => {
 // Delete node from file system
 app.delete('/api/sync/node', async (req, res) => {
   try {
-    const { node } = req.body;
+    const { node, nodes } = req.body;
     if (!node) {
       return res.status(400).json({ message: 'Node data is required' });
     }
 
-    const result = await nodeSyncService.deleteNode(node);
+    const result = await nodeSyncService.deleteNode(node, nodes);
     if (result.success) {
       res.json(result);
     } else {

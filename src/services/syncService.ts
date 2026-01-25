@@ -91,9 +91,9 @@ export async function syncNode(node: WorkflowNode): Promise<boolean> {
 }
 
 /**
- * 노드 삭제 시 파일 삭제
+ * 노드 삭제 시 파일 삭제 및 관련 참조 정리
  */
-export async function deleteNode(node: WorkflowNode): Promise<boolean> {
+export async function deleteNode(node: WorkflowNode, allNodes: WorkflowNode[]): Promise<boolean> {
   if (node.type === 'input' || node.type === 'output') {
     return true;
   }
@@ -102,7 +102,10 @@ export async function deleteNode(node: WorkflowNode): Promise<boolean> {
     const response = await fetch('/api/sync/node', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ node: toSyncData(node) }),
+      body: JSON.stringify({
+        node: toSyncData(node),
+        nodes: allNodes.map(toSyncData),
+      }),
     });
 
     if (!response.ok) {

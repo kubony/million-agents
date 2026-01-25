@@ -56,7 +56,8 @@ function getNodeTypeName(type: string | undefined) {
 }
 
 export default function StepPanel({ node }: StepPanelProps) {
-  const { updateNode, removeNode } = useWorkflowStore();
+  const { updateNode, removeNode, nodes } = useWorkflowStore();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Debounced sync to filesystem when node changes
@@ -92,12 +93,26 @@ export default function StepPanel({ node }: StepPanelProps) {
     );
   }
 
-  const handleDelete = () => {
+  const handleDeleteClick = () => {
+    // Show confirmation dialog for non-input/output nodes
+    if (node.type !== 'input' && node.type !== 'output') {
+      setShowDeleteConfirm(true);
+    } else {
+      removeNode(node.id);
+    }
+  };
+
+  const confirmDelete = () => {
     // Sync deletion to filesystem
-    deleteNode(node).catch(err => {
+    deleteNode(node, nodes as WorkflowNode[]).catch(err => {
       console.error('Failed to delete node from filesystem:', err);
     });
     removeNode(node.id);
+    setShowDeleteConfirm(false);
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
   };
 
   const handleLabelChange = (label: string) => {
@@ -122,7 +137,7 @@ export default function StepPanel({ node }: StepPanelProps) {
           </div>
         </div>
         <button
-          onClick={handleDelete}
+          onClick={handleDeleteClick}
           className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
           title="Delete node"
         >
@@ -201,6 +216,41 @@ export default function StepPanel({ node }: StepPanelProps) {
           />
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-zinc-800 rounded-lg p-6 max-w-md w-full mx-4 border border-zinc-700 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">노드 삭제 확인</h3>
+            </div>
+
+            <p className="text-zinc-300 mb-4">
+              <span className="font-medium text-white">{node.data.label}</span> 노드를 삭제하시겠습니까?
+              <br />
+              <span className="text-red-400 text-sm">이 작업은 파일을 삭제하며 되돌릴 수 없습니다.</span>
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 rounded-md bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
