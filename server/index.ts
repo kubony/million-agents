@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { ClaudeService } from './services/claudeService';
 import { fileService } from './services/fileService';
 import { workflowAIService } from './services/workflowAIService';
+import { skillGeneratorService } from './services/skillGeneratorService';
 import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
@@ -103,6 +104,40 @@ app.get('/api/settings/api-key', async (req, res) => {
     res.json(settings);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Generate skill using AI
+app.post('/api/generate/skill', async (req, res) => {
+  try {
+    const { prompt } = req.body as { prompt: string };
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ message: 'Prompt is required' });
+    }
+
+    const apiMode = req.headers['x-api-mode'] as string || 'proxy';
+    const apiKey = req.headers['x-api-key'] as string;
+    const proxyUrl = req.headers['x-proxy-url'] as string;
+
+    console.log('Generating skill for prompt:', prompt);
+
+    const result = await skillGeneratorService.generate(prompt, {
+      apiMode: apiMode as 'proxy' | 'direct',
+      apiKey,
+      proxyUrl,
+    });
+
+    if (result.success) {
+      console.log('Skill generated:', result.skill?.skillName, 'at', result.savedPath);
+      res.json(result);
+    } else {
+      res.status(500).json({ message: result.error });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Generate skill error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });
