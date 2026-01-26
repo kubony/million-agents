@@ -2,11 +2,19 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle, Wand2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useExecutionStore } from '../../stores/executionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { syncNode, deleteNode } from '../../services/syncService';
 import type { WorkflowNode, AgentNodeData, InputNodeData, SkillNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 import { AVAILABLE_SKILLS } from '../../data/availableSkills';
 import AIGenerateModal, { type GeneratedContent } from '../modals/AIGenerateModal';
+
+const NODE_TYPE_NAMES: Record<string, string> = {
+  agent: '에이전트',
+  skill: '스킬',
+  hook: '훅',
+};
 
 interface PropertiesPanelProps {
   node: WorkflowNode | undefined;
@@ -56,40 +64,105 @@ function getNodeTypeName(type: string | undefined) {
 export default function PropertiesPanel({ node }: PropertiesPanelProps) {
   const { updateNode, removeNode, nodes } = useWorkflowStore();
   const { currentProject } = useProjectStore();
+  const { addLog } = useExecutionStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // AI 생성 결과 처리
-  const handleAIGenerate = (result: GeneratedContent) => {
-    if (!node) return;
-
-    // 공통 필드
-    const updates: Record<string, unknown> = {};
-    if (result.description) {
-      updates.description = result.description;
-    }
-
-    // 노드 타입별 필드
-    if (node.type === 'agent') {
-      if (result.systemPrompt) updates.systemPrompt = result.systemPrompt;
-      if (result.tools) updates.tools = result.tools;
-      if (result.model) updates.model = result.model;
-    } else if (node.type === 'skill') {
-      if (result.skillPath) updates.skillPath = result.skillPath;
-      if (result.skillId) updates.skillId = result.skillId;
-      if (result.skillType) updates.skillType = result.skillType;
-    } else if (node.type === 'hook') {
-      if (result.hookEvent) updates.hookEvent = result.hookEvent;
-      if (result.hookMatcher) updates.hookMatcher = result.hookMatcher;
-      if (result.hookCommand) updates.hookCommand = result.hookCommand;
-    }
-
-    updateNode(node.id, updates);
-  };
 
   // AI 생성 가능한 노드 타입인지 확인
   const canUseAIGenerate = node && ['agent', 'skill', 'hook'].includes(node.type);
+
+  // AI 생성 시작 (모달에서 프롬프트 제출 시)
+  const handleAISubmit = async (prompt: string) => {
+    if (!node || !currentProject?.path) return;
+
+    const nodeTypeName = NODE_TYPE_NAMES[node.type] || node.type;
+
+    // 노드 상태를 running으로 변경
+    updateNode(node.id, { status: 'running' });
+    setIsGenerating(true);
+
+    // 로그: 시작
+    addLog('info', `🤖 "${node.data.label}" ${nodeTypeName} 생성을 시작합니다...`, node.id);
+
+    try {
+      // API 설정 가져오기
+      const { apiMode, apiKey, proxyUrl } = useSettingsStore.getState();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-API-Mode': apiMode,
+      };
+
+      if (apiMode === 'direct' && apiKey) {
+        headers['X-API-Key'] = apiKey;
+      } else if (apiMode === 'proxy' && proxyUrl) {
+        headers['X-Proxy-URL'] = proxyUrl;
+      }
+
+      // 로그: AI 분석 중
+      addLog('info', `💭 AI가 "${prompt}" 요청을 분석하고 있습니다...`, node.id);
+
+      const response = await fetch('/api/generate/node-content', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          nodeType: node.type,
+          nodeLabel: node.data.label,
+          prompt,
+          projectPath: currentProject.path,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `서버 오류 (${response.status})`);
+      }
+
+      const result: GeneratedContent = await response.json();
+
+      // 로그: 생성 완료
+      addLog('info', `✨ ${nodeTypeName} 내용이 생성되었습니다. 적용 중...`, node.id);
+
+      // 결과 적용
+      const updates: Record<string, unknown> = { status: 'idle' };
+
+      if (result.description) {
+        updates.description = result.description;
+      }
+
+      if (node.type === 'agent') {
+        if (result.systemPrompt) updates.systemPrompt = result.systemPrompt;
+        if (result.tools) updates.tools = result.tools;
+        if (result.model) updates.model = result.model;
+      } else if (node.type === 'skill') {
+        if (result.skillPath) updates.skillPath = result.skillPath;
+        if (result.skillId) updates.skillId = result.skillId;
+        if (result.skillType) updates.skillType = result.skillType;
+      } else if (node.type === 'hook') {
+        if (result.hookEvent) updates.hookEvent = result.hookEvent;
+        if (result.hookMatcher) updates.hookMatcher = result.hookMatcher;
+        if (result.hookCommand) updates.hookCommand = result.hookCommand;
+      }
+
+      updateNode(node.id, updates);
+
+      // 로그: 완료
+      addLog('success', `✅ "${node.data.label}" ${nodeTypeName}가 성공적으로 생성되었습니다!`, node.id);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류';
+
+      // 노드 상태를 error로 변경
+      updateNode(node.id, { status: 'error' });
+
+      // 로그: 에러
+      addLog('error', `❌ ${nodeTypeName} 생성 실패: ${errorMessage}`, node.id);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Debounced sync to filesystem when node changes
   const debouncedSync = useCallback((nodeToSync: WorkflowNode) => {
@@ -167,14 +240,24 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
             <p className="text-xs text-gray-500">{getNodeTypeName(node.type)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {canUseAIGenerate && (
             <button
               onClick={() => setShowAIModal(true)}
-              className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors"
+              disabled={isGenerating}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                isGenerating
+                  ? 'bg-amber-500/20 text-amber-300 cursor-not-allowed'
+                  : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300'
+              }`}
               title="AI로 상세 내용 생성"
             >
-              <Wand2 className="w-4 h-4" />
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              {isGenerating ? '생성 중...' : 'AI 생성'}
             </button>
           )}
           <button
@@ -294,8 +377,7 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
           onClose={() => setShowAIModal(false)}
           nodeType={node.type as 'agent' | 'skill' | 'hook'}
           nodeLabel={node.data.label}
-          onGenerate={handleAIGenerate}
-          projectPath={currentProject?.path}
+          onSubmit={handleAISubmit}
         />
       )}
     </div>

@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, X, Loader2, Zap, Anchor } from 'lucide-react';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { Sparkles, X, Zap, Anchor } from 'lucide-react';
 
 interface AIGenerateModalProps {
   isOpen: boolean;
   onClose: () => void;
   nodeType: 'agent' | 'skill' | 'hook';
   nodeLabel: string;
-  onGenerate: (result: GeneratedContent) => void;
-  projectPath?: string;
+  onSubmit: (prompt: string) => void;
 }
 
 export interface GeneratedContent {
@@ -46,16 +44,20 @@ const ICONS: Record<string, React.ReactNode> = {
   hook: <Anchor className="w-5 h-5 text-pink-400" />,
 };
 
+const NODE_TYPE_NAMES: Record<string, string> = {
+  agent: '에이전트',
+  skill: '스킬',
+  hook: '훅',
+};
+
 export default function AIGenerateModal({
   isOpen,
   onClose,
   nodeType,
   nodeLabel,
-  onGenerate,
-  projectPath,
+  onSubmit,
 }: AIGenerateModalProps) {
   const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -74,66 +76,22 @@ export default function AIGenerateModal({
     }
   }, [isOpen]);
 
-  const handleGenerate = async () => {
+  const handleSubmit = () => {
     if (!prompt.trim()) {
       setError('프롬프트를 입력해주세요.');
       return;
     }
 
-    if (!projectPath) {
-      setError('프로젝트가 선택되지 않았습니다.');
-      return;
-    }
-
-    setIsGenerating(true);
-    setError(null);
-
-    try {
-      // Get API settings
-      const { apiMode, apiKey, proxyUrl } = useSettingsStore.getState();
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-API-Mode': apiMode,
-      };
-
-      if (apiMode === 'direct' && apiKey) {
-        headers['X-API-Key'] = apiKey;
-      } else if (apiMode === 'proxy' && proxyUrl) {
-        headers['X-Proxy-URL'] = proxyUrl;
-      }
-
-      const response = await fetch('/api/generate/node-content', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          nodeType,
-          nodeLabel,
-          prompt: prompt.trim(),
-          projectPath,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || `서버 오류 (${response.status})`);
-      }
-
-      const result = await response.json();
-      onGenerate(result);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '생성 중 오류가 발생했습니다.');
-    } finally {
-      setIsGenerating(false);
-    }
+    // Submit prompt and close immediately
+    onSubmit(prompt.trim());
+    onClose();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Cmd/Ctrl + Enter to submit
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      handleGenerate();
+      handleSubmit();
     }
     // Escape to close
     if (e.key === 'Escape') {
@@ -173,7 +131,7 @@ export default function AIGenerateModal({
         {/* Content */}
         <div className="p-5">
           <label className="block text-sm font-medium text-zinc-300 mb-2">
-            어떤 {nodeType === 'agent' ? '에이전트' : nodeType === 'skill' ? '스킬' : '훅'}을 만들고 싶으세요?
+            어떤 {NODE_TYPE_NAMES[nodeType]}을 만들고 싶으세요?
           </label>
           <textarea
             ref={textareaRef}
@@ -181,8 +139,7 @@ export default function AIGenerateModal({
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={PLACEHOLDERS[nodeType]}
             rows={4}
-            disabled={isGenerating}
-            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
           />
 
           {error && (
@@ -192,7 +149,7 @@ export default function AIGenerateModal({
           )}
 
           <p className="mt-2 text-xs text-zinc-500">
-            자세하게 설명할수록 더 좋은 결과를 얻을 수 있습니다.
+            자세하게 설명할수록 더 좋은 결과를 얻을 수 있습니다. (⌘+Enter로 바로 생성)
           </p>
         </div>
 
@@ -200,31 +157,21 @@ export default function AIGenerateModal({
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-zinc-700 bg-zinc-800/50 rounded-b-xl">
           <button
             onClick={onClose}
-            disabled={isGenerating}
-            className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-zinc-300 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
           >
             취소
           </button>
           <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim()}
+            onClick={handleSubmit}
+            disabled={!prompt.trim()}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium transition-colors ${
-              isGenerating || !prompt.trim()
+              !prompt.trim()
                 ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
                 : 'bg-amber-600 hover:bg-amber-500 text-white'
             }`}
           >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                생성 중...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                생성하기
-              </>
-            )}
+            <Sparkles className="w-4 h-4" />
+            생성 시작
           </button>
         </div>
       </div>
