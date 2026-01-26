@@ -66,15 +66,14 @@ export default function RightSidebar({ showProperties = true }: RightSidebarProp
         </button>
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'explorer' ? (
+      {/* Tab Content - Keep both mounted, hide inactive with CSS */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <div className={`h-full ${activeTab === 'explorer' ? '' : 'hidden'}`}>
           <FileExplorer className="h-full" />
-        ) : (
-          <div className="h-full overflow-y-auto">
-            <PropertiesPanel node={selectedNode} />
-          </div>
-        )}
+        </div>
+        <div className={`h-full overflow-y-auto ${activeTab === 'properties' ? '' : 'hidden'}`}>
+          <PropertiesPanel node={selectedNode} />
+        </div>
       </div>
     </div>
   );

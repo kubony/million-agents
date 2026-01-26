@@ -150,7 +150,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         throw new Error('Failed to fetch makecc home');
       }
       const data = await response.json();
-      set({ makeccHome: data.path, currentPath: data.path });
+      const { currentPath } = get();
+      // Only set currentPath if it's not already set (preserve existing path)
+      set({
+        makeccHome: data.path,
+        currentPath: currentPath || data.path,
+      });
     } catch (error) {
       console.error('Failed to fetch makecc home:', error);
     }
