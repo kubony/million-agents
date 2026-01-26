@@ -24,6 +24,7 @@ export default function HomePage() {
     navigateToPath,
     homeScrollPosition,
     setHomeScrollPosition,
+    currentProject,
   } = useProjectStore();
 
   const { addLog } = useExecutionStore();
@@ -160,6 +161,7 @@ export default function HomePage() {
                     key={project.id}
                     project={project}
                     onClick={() => handleProjectClick(project)}
+                    isSelected={currentProject?.id === project.id}
                   />
                 ))}
               </div>

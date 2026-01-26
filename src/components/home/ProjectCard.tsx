@@ -4,6 +4,7 @@ import type { Project } from '../../types/project';
 interface ProjectCardProps {
   project: Project;
   onClick: () => void;
+  isSelected?: boolean;
 }
 
 // 프로젝트 이름에 따른 그라데이션 색상
@@ -21,13 +22,15 @@ function getGradient(name: string): string {
   return gradients[hash % gradients.length];
 }
 
-export default function ProjectCard({ project, onClick }: ProjectCardProps) {
+export default function ProjectCard({ project, onClick, isSelected = false }: ProjectCardProps) {
   const gradient = getGradient(project.name);
 
   return (
     <div
       onClick={onClick}
-      className="group relative w-72 h-56 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20"
+      className={`group relative w-72 h-56 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20 ${
+        isSelected ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-canvas scale-[1.02]' : ''
+      }`}
     >
       {/* Background */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />

@@ -152,10 +152,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         throw new Error('Failed to fetch files');
       }
       const data = await response.json();
+
+      // 현재 경로가 어떤 프로젝트에 속하는지 확인하고 currentProject 업데이트
+      const { projects } = get();
+      const matchedProject = projects.find((project) => {
+        if (!project.path) return false;
+        return data.currentPath === project.path ||
+               data.currentPath.startsWith(project.path + '/');
+      });
+
       set({
         currentPath: data.currentPath,
         parentPath: data.parentPath,
         fileItems: data.items,
+        currentProject: matchedProject || null,
       });
     } catch (error) {
       console.error('Failed to fetch files:', error);
@@ -174,10 +184,21 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         throw new Error('Failed to fetch files');
       }
       const data = await response.json();
+
+      // 현재 경로가 어떤 프로젝트에 속하는지 확인하고 currentProject 업데이트
+      const { projects } = get();
+      const matchedProject = projects.find((project) => {
+        if (!project.path) return false;
+        // 현재 경로가 프로젝트 경로와 같거나 하위 경로인지 확인
+        return data.currentPath === project.path ||
+               data.currentPath.startsWith(project.path + '/');
+      });
+
       set({
         currentPath: data.currentPath,
         parentPath: data.parentPath,
         fileItems: data.items,
+        currentProject: matchedProject || null,
       });
     } catch (error) {
       console.error('Failed to navigate to path:', error);
