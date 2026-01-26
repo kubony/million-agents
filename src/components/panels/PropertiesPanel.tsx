@@ -66,12 +66,49 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
   const { currentProject } = useProjectStore();
   const { addLog } = useExecutionStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // AI 생성 가능한 노드 타입인지 확인
   const canUseAIGenerate = node && ['agent', 'skill', 'hook'].includes(node.type);
+
+  // 노드에 기존 내용이 있는지 확인
+  const hasExistingContent = (): boolean => {
+    if (!node) return false;
+
+    if (node.type === 'agent') {
+      const data = node.data as AgentNodeData;
+      // systemPrompt가 있거나 description이 충분히 있으면 내용이 있는 것으로 판단
+      return !!(data.systemPrompt && data.systemPrompt.trim().length > 0);
+    } else if (node.type === 'skill') {
+      const data = node.data as SkillNodeData;
+      // 생성된 스킬이거나 스킬이 선택되어 있으면 내용이 있는 것
+      return !!(data.skillPath || (data.skillType === 'generated'));
+    } else if (node.type === 'hook') {
+      const data = node.data as HookNodeData;
+      // hookCommand가 있으면 내용이 있는 것
+      return !!(data.hookCommand && data.hookCommand.trim().length > 0);
+    }
+
+    return false;
+  };
+
+  // AI 생성 버튼 클릭 핸들러
+  const handleAIButtonClick = () => {
+    if (hasExistingContent()) {
+      setShowOverwriteConfirm(true);
+    } else {
+      setShowAIModal(true);
+    }
+  };
+
+  // 덮어쓰기 확인 후 진행
+  const confirmOverwrite = () => {
+    setShowOverwriteConfirm(false);
+    setShowAIModal(true);
+  };
 
   // AI 생성 시작 (모달에서 프롬프트 제출 시)
   const handleAISubmit = async (prompt: string) => {
@@ -243,7 +280,7 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
         <div className="flex items-center gap-2">
           {canUseAIGenerate && (
             <button
-              onClick={() => setShowAIModal(true)}
+              onClick={handleAIButtonClick}
               disabled={isGenerating}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 isGenerating
@@ -365,6 +402,41 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
                 className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors"
               >
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Overwrite Confirmation Dialog */}
+      {showOverwriteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-zinc-800 rounded-lg p-6 max-w-md w-full mx-4 border border-zinc-700 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Wand2 className="w-5 h-5 text-amber-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">기존 내용 덮어쓰기</h3>
+            </div>
+
+            <p className="text-zinc-300 mb-4">
+              <span className="font-medium text-white">{node.data.label}</span>에 이미 설정된 내용이 있습니다.
+              <br />
+              <span className="text-amber-400 text-sm">AI로 새로 생성하면 기존 내용이 삭제됩니다.</span>
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowOverwriteConfirm(false)}
+                className="px-4 py-2 rounded-md bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmOverwrite}
+                className="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-500 transition-colors"
+              >
+                새로 생성하기
               </button>
             </div>
           </div>
