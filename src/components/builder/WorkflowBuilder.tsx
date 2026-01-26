@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import Header from '../layout/Header';
 import NodePalette from '../layout/NodePalette';
 import FlowCanvas from '../canvas/FlowCanvas';
@@ -16,7 +17,8 @@ import { loadClaudeConfig } from '../../services/configLoader';
 export default function WorkflowBuilder() {
   const navigate = useNavigate();
   const { projectName } = useParams<{ projectName: string }>();
-  const { isCollapsed, width } = usePanelStore();
+  const { isCollapsed, width, setWidth, toggleCollapsed } = usePanelStore();
+  const isResizing = useRef(false);
   const { mergeExistingConfig, clearWorkflow } = useWorkflowStore();
   const { currentProject, navigateToPath, projects, fetchProjects, setCurrentProject } = useProjectStore();
   const initialLoadDone = useRef(false);
@@ -96,6 +98,36 @@ export default function WorkflowBuilder() {
     });
   }, [currentProject?.path, mergeExistingConfig, clearWorkflow]);
 
+  // Resize handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing.current) return;
+    const newWidth = window.innerWidth - e.clientX;
+    setWidth(newWidth);
+  }, [setWidth]);
+
+  const handleMouseUp = useCallback(() => {
+    isResizing.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  // Attach global mouse events for resize
+  useEffect(() => {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
+
   return (
     <ReactFlowProvider>
       <div className="flex flex-col h-screen bg-canvas overflow-hidden">
@@ -120,15 +152,51 @@ export default function WorkflowBuilder() {
             </div>
           </div>
 
-          {/* Right Sidebar */}
-          {!isCollapsed && (
-            <div
-              className="border-l border-border bg-surface flex-shrink-0"
-              style={{ width: `${width}px` }}
-            >
-              <RightSidebar />
-            </div>
-          )}
+          {/* Right Sidebar with Resize Handle */}
+          <div className="relative flex flex-shrink-0">
+            {/* Toggle Button (shown when collapsed) */}
+            {isCollapsed && (
+              <button
+                onClick={toggleCollapsed}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-surface hover:bg-surface-hover border border-border rounded-l-md text-gray-400 hover:text-white transition-colors"
+                title="Explorer 열기"
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Sidebar Content */}
+            {!isCollapsed && (
+              <>
+                {/* Resize Handle */}
+                <div
+                  onMouseDown={handleMouseDown}
+                  className="w-1 cursor-col-resize hover:bg-amber-500/50 active:bg-amber-500 transition-colors flex-shrink-0"
+                  title="드래그하여 크기 조정"
+                />
+
+                {/* Sidebar */}
+                <div
+                  className="border-l border-border bg-surface flex flex-col"
+                  style={{ width: `${width}px` }}
+                >
+                  {/* Collapse Button in Header */}
+                  <div className="flex items-center justify-end px-2 py-1 border-b border-border">
+                    <button
+                      onClick={toggleCollapsed}
+                      className="p-1 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition-colors"
+                      title="Explorer 닫기"
+                    >
+                      <PanelRightClose className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <RightSidebar />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Bottom Console Panel */}
