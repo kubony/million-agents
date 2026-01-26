@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle } from 'lucide-react';
+import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle, Wand2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { syncNode, deleteNode } from '../../services/syncService';
 import type { WorkflowNode, AgentNodeData, InputNodeData, SkillNodeData, HookNodeData } from '../../types/nodes';
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 import { AVAILABLE_SKILLS } from '../../data/availableSkills';
+import AIGenerateModal, { type GeneratedContent } from '../modals/AIGenerateModal';
 
 interface PropertiesPanelProps {
   node: WorkflowNode | undefined;
@@ -53,8 +55,41 @@ function getNodeTypeName(type: string | undefined) {
 
 export default function PropertiesPanel({ node }: PropertiesPanelProps) {
   const { updateNode, removeNode, nodes } = useWorkflowStore();
+  const { currentProject } = useProjectStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // AI 생성 결과 처리
+  const handleAIGenerate = (result: GeneratedContent) => {
+    if (!node) return;
+
+    // 공통 필드
+    const updates: Record<string, unknown> = {};
+    if (result.description) {
+      updates.description = result.description;
+    }
+
+    // 노드 타입별 필드
+    if (node.type === 'agent') {
+      if (result.systemPrompt) updates.systemPrompt = result.systemPrompt;
+      if (result.tools) updates.tools = result.tools;
+      if (result.model) updates.model = result.model;
+    } else if (node.type === 'skill') {
+      if (result.skillPath) updates.skillPath = result.skillPath;
+      if (result.skillId) updates.skillId = result.skillId;
+      if (result.skillType) updates.skillType = result.skillType;
+    } else if (node.type === 'hook') {
+      if (result.hookEvent) updates.hookEvent = result.hookEvent;
+      if (result.hookMatcher) updates.hookMatcher = result.hookMatcher;
+      if (result.hookCommand) updates.hookCommand = result.hookCommand;
+    }
+
+    updateNode(node.id, updates);
+  };
+
+  // AI 생성 가능한 노드 타입인지 확인
+  const canUseAIGenerate = node && ['agent', 'skill', 'hook'].includes(node.type);
 
   // Debounced sync to filesystem when node changes
   const debouncedSync = useCallback((nodeToSync: WorkflowNode) => {
@@ -132,13 +167,24 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
             <p className="text-xs text-gray-500">{getNodeTypeName(node.type)}</p>
           </div>
         </div>
-        <button
-          onClick={handleDeleteClick}
-          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-          title="Delete node"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {canUseAIGenerate && (
+            <button
+              onClick={() => setShowAIModal(true)}
+              className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors"
+              title="AI로 상세 내용 생성"
+            >
+              <Wand2 className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleDeleteClick}
+            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Delete node"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -239,6 +285,18 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Generate Modal */}
+      {canUseAIGenerate && (
+        <AIGenerateModal
+          isOpen={showAIModal}
+          onClose={() => setShowAIModal(false)}
+          nodeType={node.type as 'agent' | 'skill' | 'hook'}
+          nodeLabel={node.data.label}
+          onGenerate={handleAIGenerate}
+          projectPath={currentProject?.path}
+        />
       )}
     </div>
   );

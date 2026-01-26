@@ -28,6 +28,7 @@ import { workflowExecutionService } from './services/workflowExecutionService';
 import { executeInTerminal, getClaudeCommand } from './services/terminalService';
 import { claudeMdService } from './services/claudeMdService';
 import { projectService } from './services/projectService';
+import { nodeContentService } from './services/nodeContentService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
@@ -393,6 +394,50 @@ app.post('/api/generate/skill', async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Generate skill error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Generate node content using AI (agent, skill, hook)
+app.post('/api/generate/node-content', async (req, res) => {
+  try {
+    const { nodeType, nodeLabel, prompt, projectPath } = req.body as {
+      nodeType: 'agent' | 'skill' | 'hook';
+      nodeLabel: string;
+      prompt: string;
+      projectPath: string;
+    };
+
+    if (!nodeType || !prompt || !projectPath) {
+      return res.status(400).json({
+        message: 'nodeType, prompt, projectPath are required',
+      });
+    }
+
+    // Get API settings from headers
+    const apiMode = req.headers['x-api-mode'] as string || 'proxy';
+    const apiKey = req.headers['x-api-key'] as string;
+    const proxyUrl = req.headers['x-proxy-url'] as string;
+
+    console.log(`Generating ${nodeType} content for:`, nodeLabel, 'prompt:', prompt);
+
+    const settings = {
+      apiMode: apiMode as 'proxy' | 'direct',
+      apiKey,
+      proxyUrl,
+      projectPath,
+    };
+
+    const result = await nodeContentService.generate(
+      { nodeType, nodeLabel, prompt, projectPath },
+      settings
+    );
+
+    console.log(`${nodeType} content generated successfully`);
+    res.json(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Generate node content error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });
