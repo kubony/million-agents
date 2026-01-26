@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle, Wand2 } from 'lucide-react';
+import { Trash2, Sparkles, MessageSquare, Zap, Anchor, BarChart3, Settings2, FileCode, ChevronDown, ChevronRight, Loader2, Play, CheckCircle, XCircle, Wand2, ExternalLink } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExecutionStore } from '../../stores/executionStore';
@@ -310,6 +310,7 @@ export default function PropertiesPanel({ node }: PropertiesPanelProps) {
         {node.type === 'agent' && (
           <AgentSettings
             data={node.data as AgentNodeData}
+            nodeLabel={node.data.label}
             onUpdate={(data) => updateNode(node.id, data)}
           />
         )}
@@ -435,12 +436,62 @@ function InputSettings({
 function AgentSettings({
   data,
   onUpdate,
+  nodeLabel,
 }: {
   data: AgentNodeData;
+  nodeLabel: string;
   onUpdate: (data: Partial<AgentNodeData>) => void;
 }) {
+  const { currentProject } = useProjectStore();
+
+  // Calculate agent file path
+  const agentFilePath = currentProject?.path
+    ? `${currentProject.path}/.claude/agents/${nodeLabel}.md`
+    : null;
+
+  const handleOpenInFinder = async () => {
+    if (!agentFilePath) return;
+    // Open the .claude/agents folder (containing folder)
+    const agentsFolderPath = currentProject?.path
+      ? `${currentProject.path}/.claude/agents`
+      : null;
+    if (!agentsFolderPath) return;
+
+    try {
+      await fetch('/api/open-in-finder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: agentsFolderPath }),
+      });
+    } catch (error) {
+      console.error('Failed to open in Finder:', error);
+    }
+  };
+
   return (
     <>
+      {/* File Location */}
+      {agentFilePath && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">
+              File Location
+            </label>
+            <button
+              onClick={handleOpenInFinder}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-surface-hover rounded transition-colors"
+              title="Finder에서 열기"
+            >
+              <ExternalLink className="w-3 h-3" />
+              열기
+            </button>
+          </div>
+          <div className="px-3 py-2 bg-surface border border-border rounded-lg text-gray-400 text-sm font-mono break-all">
+            {agentFilePath.replace(/^\/Users\/[^/]+/, '~')}
+          </div>
+        </div>
+      )}
+
       {/* Model Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -598,9 +649,29 @@ function SkillSettings({
       <>
         {/* 스킬 경로 */}
         <div>
-          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-            Skill Path
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Skill Path
+            </label>
+            <button
+              onClick={async () => {
+                try {
+                  await fetch('/api/open-in-finder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: data.skillPath }),
+                  });
+                } catch (error) {
+                  console.error('Failed to open in Finder:', error);
+                }
+              }}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-surface-hover rounded transition-colors"
+              title="Finder에서 열기"
+            >
+              <ExternalLink className="w-3 h-3" />
+              열기
+            </button>
+          </div>
           <div className="px-3 py-2 bg-surface border border-border rounded-lg text-gray-400 text-sm font-mono break-all">
             {data.skillPath}
           </div>
