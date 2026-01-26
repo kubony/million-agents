@@ -174,7 +174,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
       // 현재 경로가 어떤 프로젝트에 속하는지 확인하고 currentProject 업데이트
       // 단, projects가 로드되지 않았으면 currentProject를 변경하지 않음 (race condition 방지)
-      const { projects, currentProject } = get();
+      const { projects } = get();
 
       if (projects.length > 0) {
         const matchedProject = projects.find((project) => {

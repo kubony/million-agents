@@ -71,13 +71,19 @@ export async function syncNode(node: WorkflowNode): Promise<boolean> {
     return true;
   }
 
+  const projectPath = getProjectPath();
+  if (!projectPath) {
+    console.warn('[syncNode] 프로젝트가 선택되지 않아 동기화를 건너뜁니다.');
+    return false;
+  }
+
   try {
     const response = await fetch('/api/sync/node', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         node: toSyncData(node),
-        projectPath: getProjectPath(),
+        projectPath,
       }),
     });
 
@@ -101,6 +107,12 @@ export async function deleteNode(node: WorkflowNode, allNodes: WorkflowNode[]): 
     return true;
   }
 
+  const projectPath = getProjectPath();
+  if (!projectPath) {
+    console.warn('[deleteNode] 프로젝트가 선택되지 않아 동기화를 건너뜁니다.');
+    return false;
+  }
+
   try {
     const response = await fetch('/api/sync/node', {
       method: 'DELETE',
@@ -108,7 +120,7 @@ export async function deleteNode(node: WorkflowNode, allNodes: WorkflowNode[]): 
       body: JSON.stringify({
         node: toSyncData(node),
         nodes: allNodes.map(toSyncData),
-        projectPath: getProjectPath(),
+        projectPath,
       }),
     });
 
@@ -146,6 +158,12 @@ export async function syncEdge(
     return true;
   }
 
+  const projectPath = getProjectPath();
+  if (!projectPath) {
+    console.warn('[syncEdge] 프로젝트가 선택되지 않아 동기화를 건너뜁니다.');
+    return false;
+  }
+
   try {
     const response = await fetch('/api/sync/edge', {
       method: 'POST',
@@ -158,7 +176,7 @@ export async function syncEdge(
           targetType: targetNode.type,
         },
         nodes: nodes.map(toSyncData),
-        projectPath: getProjectPath(),
+        projectPath,
       }),
     });
 
@@ -188,6 +206,12 @@ export async function removeEdge(
     return true;
   }
 
+  const projectPath = getProjectPath();
+  if (!projectPath) {
+    console.warn('[removeEdge] 프로젝트가 선택되지 않아 동기화를 건너뜁니다.');
+    return false;
+  }
+
   try {
     const response = await fetch('/api/sync/edge', {
       method: 'DELETE',
@@ -200,7 +224,7 @@ export async function removeEdge(
           targetType: targetNode.type,
         },
         nodes: nodes.map(toSyncData),
-        projectPath: getProjectPath(),
+        projectPath,
       }),
     });
 

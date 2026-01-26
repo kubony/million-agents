@@ -63,6 +63,13 @@ export async function generateSkill(
   // projectPath가 없으면 currentProject.path 사용
   const targetPath = projectPath || currentProject?.path;
 
+  if (!targetPath) {
+    return {
+      success: false,
+      error: '프로젝트를 먼저 선택해주세요. 홈에서 프로젝트를 선택하거나 새로 만드세요.',
+    };
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-API-Mode': apiMode,
