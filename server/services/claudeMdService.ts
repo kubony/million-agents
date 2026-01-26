@@ -2,14 +2,33 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import { execSync, spawn } from 'child_process';
+import {
+  isWindows,
+  getVenvPythonPath,
+  getVenvActivateCommand,
+  getVenvPipPath,
+  checkCommandExists,
+  getVenvCreateCommand,
+  getHomeDir,
+  getVenvPythonPathForDocs,
+  getVenvActivateCommandForDocs,
+  getUvInstallCommandForDocs,
+} from '../utils/platform';
 
 const MAKECC_SECTION_MARKER = '<!-- makecc-managed-section -->';
 const MAKECC_SECTION_END = '<!-- /makecc-managed-section -->';
 
 /**
  * makecc가 로컬 프로젝트에 추가할 CLAUDE.md 기본 템플릿
+ * 플랫폼에 따라 동적으로 경로를 생성
  */
-const MAKECC_CLAUDE_MD_TEMPLATE = `${MAKECC_SECTION_MARKER}
+function getMakeccClaudeMdTemplate(): string {
+  const venvPython = getVenvPythonPathForDocs();
+  const venvActivate = getVenvActivateCommandForDocs();
+  const uvInstall = getUvInstallCommandForDocs();
+  const venvPip = isWindows() ? '.venv\\Scripts\\pip.exe' : '.venv/bin/pip';
+
+  return `${MAKECC_SECTION_MARKER}
 ## makecc 스킬/워크플로우 규칙
 
 이 섹션은 makecc에 의해 자동 생성되었습니다.
@@ -26,10 +45,10 @@ const MAKECC_CLAUDE_MD_TEMPLATE = `${MAKECC_SECTION_MARKER}
 
 \`\`\`bash
 # 로컬 venv Python 직접 실행 (권장)
-.venv/bin/python script.py
+${venvPython} script.py
 
 # 또는 활성화 후 실행
-source .venv/bin/activate && python script.py
+${venvActivate} && python script.py
 \`\`\`
 
 ### 패키지 관리
@@ -38,13 +57,13 @@ source .venv/bin/activate && python script.py
 
 \`\`\`bash
 # uv로 패키지 설치 (권장)
-uv pip install --python .venv/bin/python package_name
+${uvInstall} package_name
 
 # requirements.txt 설치
-uv pip install --python .venv/bin/python -r requirements.txt
+${uvInstall} -r requirements.txt
 
 # uv가 없으면 pip 폴백
-.venv/bin/pip install package_name
+${venvPip} install package_name
 \`\`\`
 
 ### 스킬 저장 경로
@@ -67,13 +86,14 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ### 스킬 실행 규칙
 
-1. **가상환경 사용**: 항상 \`.venv/bin/python\` 사용
+1. **가상환경 사용**: 항상 \`${venvPython}\` 사용
 2. **의존성 설치**: \`uv pip install\` 우선, 실패 시 \`pip\` 폴백
 3. **경로 참조**: 상대 경로 대신 절대 경로 사용 권장
 4. **한글 지원**: 사용자 메시지는 한글로 출력
 
 ${MAKECC_SECTION_END}
 `;
+}
 
 export class ClaudeMdService {
   private projectRoot: string;
@@ -122,14 +142,14 @@ export class ClaudeMdService {
 
 이 파일은 Claude Code가 이 프로젝트의 코드를 다룰 때 참고하는 가이드입니다.
 
-${MAKECC_CLAUDE_MD_TEMPLATE}
+${getMakeccClaudeMdTemplate()}
 `;
       await fs.writeFile(claudeMdPath, newContent, 'utf-8');
       result.created = true;
       console.log(`Created CLAUDE.md at ${claudeMdPath}`);
     } else if (!this.hasMakeccSection(existingContent)) {
       // 파일은 있지만 makecc 섹션이 없으면 추가
-      const updatedContent = existingContent.trimEnd() + '\n\n' + MAKECC_CLAUDE_MD_TEMPLATE;
+      const updatedContent = existingContent.trimEnd() + '\n\n' + getMakeccClaudeMdTemplate();
       await fs.writeFile(claudeMdPath, updatedContent, 'utf-8');
       result.updated = true;
       console.log(`Added makecc section to CLAUDE.md at ${claudeMdPath}`);
@@ -156,11 +176,12 @@ ${MAKECC_CLAUDE_MD_TEMPLATE}
 
     try {
       // uv가 있으면 uv venv 사용 (더 빠름)
-      if (this.checkCommandExists('uv')) {
+      if (checkCommandExists('uv')) {
         execSync(`uv venv "${venvPath}"`, { cwd: this.projectRoot, stdio: 'inherit' });
       } else {
-        // python -m venv 사용
-        execSync(`python3 -m venv "${venvPath}"`, { cwd: this.projectRoot, stdio: 'inherit' });
+        // python -m venv 사용 (플랫폼별 명령어)
+        const createCmd = getVenvCreateCommand(venvPath);
+        execSync(createCmd, { cwd: this.projectRoot, stdio: 'inherit' });
       }
       result.created = true;
       console.log(`Created virtual environment at ${venvPath}`);
@@ -178,7 +199,7 @@ ${MAKECC_CLAUDE_MD_TEMPLATE}
   async ensureUvInstalled(): Promise<{ installed: boolean; alreadyExists: boolean }> {
     const result = { installed: false, alreadyExists: false };
 
-    if (this.checkCommandExists('uv')) {
+    if (checkCommandExists('uv')) {
       result.alreadyExists = true;
       console.log('uv is already installed');
       return result;
@@ -187,21 +208,46 @@ ${MAKECC_CLAUDE_MD_TEMPLATE}
     console.log('uv not found, attempting to install...');
 
     try {
-      // curl 스크립트로 설치
-      await this.runCommand('curl', ['-LsSf', 'https://astral.sh/uv/install.sh', '-o', '/tmp/uv-install.sh']);
-      await this.runCommand('sh', ['/tmp/uv-install.sh']);
+      const homeDir = getHomeDir();
 
-      // PATH에 추가된 uv 확인
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const uvPath = path.join(homeDir, '.local', 'bin', 'uv');
+      if (isWindows()) {
+        // Windows: PowerShell로 설치
+        await this.runCommand('powershell', [
+          '-ExecutionPolicy', 'ByPass',
+          '-c', 'irm https://astral.sh/uv/install.ps1 | iex'
+        ]);
 
-      if (existsSync(uvPath)) {
-        // PATH에 추가
-        process.env.PATH = `${path.dirname(uvPath)}:${process.env.PATH}`;
-        result.installed = true;
-        console.log('uv installed successfully');
+        // Windows에서 uv 경로 확인
+        const uvPath = path.join(homeDir, '.local', 'bin', 'uv.exe');
+        const uvPathAlt = path.join(homeDir, '.cargo', 'bin', 'uv.exe');
+
+        if (existsSync(uvPath)) {
+          process.env.PATH = `${path.dirname(uvPath)};${process.env.PATH}`;
+          result.installed = true;
+          console.log('uv installed successfully');
+        } else if (existsSync(uvPathAlt)) {
+          process.env.PATH = `${path.dirname(uvPathAlt)};${process.env.PATH}`;
+          result.installed = true;
+          console.log('uv installed successfully');
+        } else {
+          console.warn('uv installation may have failed, falling back to pip');
+        }
       } else {
-        console.warn('uv installation may have failed, falling back to pip');
+        // Unix: curl 스크립트로 설치
+        await this.runCommand('curl', ['-LsSf', 'https://astral.sh/uv/install.sh', '-o', '/tmp/uv-install.sh']);
+        await this.runCommand('sh', ['/tmp/uv-install.sh']);
+
+        // PATH에 추가된 uv 확인
+        const uvPath = path.join(homeDir, '.local', 'bin', 'uv');
+
+        if (existsSync(uvPath)) {
+          // PATH에 추가
+          process.env.PATH = `${path.dirname(uvPath)}:${process.env.PATH}`;
+          result.installed = true;
+          console.log('uv installed successfully');
+        } else {
+          console.warn('uv installation may have failed, falling back to pip');
+        }
       }
     } catch (error) {
       console.error('Failed to install uv:', error);
@@ -238,18 +284,6 @@ ${MAKECC_CLAUDE_MD_TEMPLATE}
       venv: venvResult,
       uv: uvResult,
     };
-  }
-
-  /**
-   * 명령어 존재 확인
-   */
-  private checkCommandExists(cmd: string): boolean {
-    try {
-      execSync(`which ${cmd}`, { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   /**
