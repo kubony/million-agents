@@ -2,9 +2,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import type { ApiSettings } from './workflowAIService';
 import { claudeMdService } from './claudeMdService';
+import {
+  checkCommandExists,
+  getVenvPythonPath,
+  getVenvPipPath,
+  isWindows,
+} from '../utils/platform';
 
 export interface GeneratedSkill {
   skillName: string;
@@ -42,7 +48,17 @@ export interface SkillProgressEvent {
 
 export type SkillProgressCallback = (event: SkillProgressEvent) => void;
 
-const SYSTEM_PROMPT = `You are an expert Claude Code skill generator. Generate production-quality skills with complete, working code.
+/**
+ * 플랫폼별 경로를 포함한 시스템 프롬프트 생성
+ */
+function getSystemPrompt(): string {
+  // 플랫폼별 venv 경로
+  const venvPython = isWindows() ? '.venv\\\\Scripts\\\\python.exe' : '.venv/bin/python';
+  const uvInstall = isWindows()
+    ? 'uv pip install --python .venv\\\\Scripts\\\\python.exe'
+    : 'uv pip install --python .venv/bin/python';
+
+  return `You are an expert Claude Code skill generator. Generate production-quality skills with complete, working code.
 
 RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO CODE BLOCKS, NO EXPLANATIONS.
 
@@ -51,7 +67,7 @@ RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO CODE BLOCKS, NO EXPLANAT
 {
   "skillName": "Human Readable Skill Name",
   "skillId": "skill-id-in-kebab-case",
-  "description": "Comprehensive description including what it does AND when to use it. Include trigger phrases in Korean. Example: 'PDF 문서에서 텍스트 추출 및 분석. \"PDF 읽어줘\", \"PDF 분석해줘\", \"PDF에서 텍스트 추출\" 등의 요청 시 사용.'",
+  "description": "Comprehensive description including what it does AND when to use it. Include trigger phrases in Korean. Example: 'PDF 문서에서 텍스트 추출 및 분석. \\"PDF 읽어줘\\", \\"PDF 분석해줘\\", \\"PDF에서 텍스트 추출\\" 등의 요청 시 사용.'",
   "files": [
     {
       "path": "SKILL.md",
@@ -65,7 +81,7 @@ RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO CODE BLOCKS, NO EXPLANAT
     },
     {
       "path": "requirements.txt",
-      "content": "package1\\npackage2",
+      "content": "package1\\\\npackage2",
       "language": "text"
     }
   ]
@@ -92,7 +108,7 @@ List any prerequisites:
 ## 빠른 시작
 
 \\\`\\\`\\\`bash
-.venv/bin/python .claude/skills/skill-id/scripts/main.py \\\\
+${venvPython} .claude/skills/skill-id/scripts/main.py \\\\
   --required-arg "value" \\\\
   --output output.ext
 \\\`\\\`\\\`
@@ -108,13 +124,13 @@ List any prerequisites:
 
 ### 예시 1: Basic Usage
 \\\`\\\`\\\`bash
-.venv/bin/python .claude/skills/skill-id/scripts/main.py \\\\
+${venvPython} .claude/skills/skill-id/scripts/main.py \\\\
   --arg "value" --output result.ext
 \\\`\\\`\\\`
 
 ### 예시 2: Advanced Usage
 \\\`\\\`\\\`bash
-.venv/bin/python .claude/skills/skill-id/scripts/main.py \\\\
+${venvPython} .claude/skills/skill-id/scripts/main.py \\\\
   --arg "value" --advanced-option
 \\\`\\\`\\\`
 
@@ -158,7 +174,7 @@ def check_dependencies():
         return True
     except ImportError:
         print("❌ required_package가 설치되어 있지 않습니다.")
-        print("   설치: uv pip install --python .venv/bin/python required_package")
+        print("   설치: ${uvInstall} required_package")
         return False
 
 def main_function(arg1, arg2, output_path):
@@ -188,11 +204,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Skill description",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=\"\"\"
+        epilog="""
 예시:
   python main.py --input data.txt --output result.txt
   python main.py --input data.txt --output result.txt --option
-        \"\"\"
+        """
     )
 
     parser.add_argument("--input", "-i", required=True, help="입력 파일")
@@ -220,6 +236,7 @@ if __name__ == "__main__":
 6. SKILL.md MUST have complete usage examples with actual commands
 7. Always include requirements.txt with specific packages needed
 8. RESPOND WITH JSON ONLY - NO OTHER TEXT`;
+}
 
 export class SkillGeneratorService {
   private defaultProjectRoot: string;
@@ -325,7 +342,7 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
-        system: SYSTEM_PROMPT,
+        system: getSystemPrompt(),
         messages: [
           { role: 'user', content: userPrompt },
           { role: 'assistant', content: '{' }  // Prefill to force JSON
@@ -448,15 +465,16 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
     progress: SkillProgressCallback
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      // 로컬 프로젝트의 .venv 사용
-      const localVenvPythonPath = path.join(projectRoot, '.venv', 'bin', 'python');
-      const localVenvPipPath = path.join(projectRoot, '.venv', 'bin', 'pip');
+      // 로컬 프로젝트의 .venv 사용 (플랫폼별 경로)
+      const venvDir = path.join(projectRoot, '.venv');
+      const localVenvPythonPath = getVenvPythonPath(venvDir);
+      const localVenvPipPath = getVenvPipPath(venvDir);
 
       let command: string;
       let args: string[];
 
       // uv를 우선 사용 (10-100x 빠름)
-      const useUv = this.checkCommandExists('uv');
+      const useUv = checkCommandExists('uv');
 
       if (useUv && existsSync(localVenvPythonPath)) {
         command = 'uv';
@@ -535,15 +553,6 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
     });
   }
 
-  private checkCommandExists(cmd: string): boolean {
-    try {
-      const { execSync } = require('child_process');
-      execSync(`which ${cmd}`, { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }
 
 export const skillGeneratorService = new SkillGeneratorService();
