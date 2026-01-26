@@ -222,10 +222,18 @@ if __name__ == "__main__":
 8. RESPOND WITH JSON ONLY - NO OTHER TEXT`;
 
 export class SkillGeneratorService {
-  private projectRoot: string;
+  private defaultProjectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.projectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
+    this.defaultProjectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
+  }
+
+  /**
+   * 프로젝트 루트 경로 결정
+   * settings.projectPath > defaultProjectRoot
+   */
+  private getProjectRoot(settings?: ApiSettings): string {
+    return settings?.projectPath || this.defaultProjectRoot;
   }
 
   private getClient(settings?: ApiSettings): Anthropic {
@@ -361,8 +369,12 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
         detail: `${skill.files.length}개 파일 저장 중...`,
       });
 
+      // 프로젝트 경로 결정 (settings.projectPath > defaultProjectRoot)
+      const projectRoot = this.getProjectRoot(settings);
+      console.log(`Saving skill to project: ${projectRoot}`);
+
       // 파일 저장
-      const skillPath = path.join(this.projectRoot, '.claude', 'skills', skill.skillId);
+      const skillPath = path.join(projectRoot, '.claude', 'skills', skill.skillId);
       await this.saveSkillFiles(skillPath, skill.files);
 
       // requirements.txt가 있으면 의존성 설치
@@ -375,7 +387,7 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
         });
 
         try {
-          await this.installDependencies(requirementsPath, progress);
+          await this.installDependencies(requirementsPath, projectRoot, progress);
         } catch (installError) {
           // 설치 실패해도 스킬 생성은 성공으로 처리
           console.error('Dependency installation failed:', installError);
@@ -432,12 +444,13 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
 
   private async installDependencies(
     requirementsPath: string,
+    projectRoot: string,
     progress: SkillProgressCallback
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       // 로컬 프로젝트의 .venv 사용
-      const localVenvPythonPath = path.join(this.projectRoot, '.venv', 'bin', 'python');
-      const localVenvPipPath = path.join(this.projectRoot, '.venv', 'bin', 'pip');
+      const localVenvPythonPath = path.join(projectRoot, '.venv', 'bin', 'python');
+      const localVenvPipPath = path.join(projectRoot, '.venv', 'bin', 'pip');
 
       let command: string;
       let args: string[];

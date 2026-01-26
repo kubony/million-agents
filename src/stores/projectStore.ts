@@ -29,6 +29,7 @@ interface ProjectStore {
   fetchProjects: () => Promise<void>;
   createProject: (name: string, description: string) => Promise<Project | null>;
   deleteProject: (id: string) => Promise<boolean>;
+  copyProject: (id: string) => Promise<Project | null>;
 
   // File explorer actions
   fetchFiles: (path?: string) => Promise<void>;
@@ -123,6 +124,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  copyProject: async (id: string) => {
+    try {
+      const response = await fetch(`/api/projects/${id}/copy`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to copy project');
+      }
+      const project = await response.json();
+      set((state) => ({ projects: [project, ...state.projects] }));
+      return project;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      set({ error: message });
+      return null;
+    }
+  },
+
   // File explorer actions
   fetchMakeccHome: async () => {
     try {
@@ -154,19 +173,30 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const data = await response.json();
 
       // 현재 경로가 어떤 프로젝트에 속하는지 확인하고 currentProject 업데이트
-      const { projects } = get();
-      const matchedProject = projects.find((project) => {
-        if (!project.path) return false;
-        return data.currentPath === project.path ||
-               data.currentPath.startsWith(project.path + '/');
-      });
+      // 단, projects가 로드되지 않았으면 currentProject를 변경하지 않음 (race condition 방지)
+      const { projects, currentProject } = get();
 
-      set({
-        currentPath: data.currentPath,
-        parentPath: data.parentPath,
-        fileItems: data.items,
-        currentProject: matchedProject || null,
-      });
+      if (projects.length > 0) {
+        const matchedProject = projects.find((project) => {
+          if (!project.path) return false;
+          return data.currentPath === project.path ||
+                 data.currentPath.startsWith(project.path + '/');
+        });
+
+        set({
+          currentPath: data.currentPath,
+          parentPath: data.parentPath,
+          fileItems: data.items,
+          currentProject: matchedProject || null,
+        });
+      } else {
+        // projects가 비어있으면 currentProject는 유지
+        set({
+          currentPath: data.currentPath,
+          parentPath: data.parentPath,
+          fileItems: data.items,
+        });
+      }
     } catch (error) {
       console.error('Failed to fetch files:', error);
       set({ fileItems: [] });
@@ -186,20 +216,31 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const data = await response.json();
 
       // 현재 경로가 어떤 프로젝트에 속하는지 확인하고 currentProject 업데이트
+      // 단, projects가 로드되지 않았으면 currentProject를 변경하지 않음 (race condition 방지)
       const { projects } = get();
-      const matchedProject = projects.find((project) => {
-        if (!project.path) return false;
-        // 현재 경로가 프로젝트 경로와 같거나 하위 경로인지 확인
-        return data.currentPath === project.path ||
-               data.currentPath.startsWith(project.path + '/');
-      });
 
-      set({
-        currentPath: data.currentPath,
-        parentPath: data.parentPath,
-        fileItems: data.items,
-        currentProject: matchedProject || null,
-      });
+      if (projects.length > 0) {
+        const matchedProject = projects.find((project) => {
+          if (!project.path) return false;
+          // 현재 경로가 프로젝트 경로와 같거나 하위 경로인지 확인
+          return data.currentPath === project.path ||
+                 data.currentPath.startsWith(project.path + '/');
+        });
+
+        set({
+          currentPath: data.currentPath,
+          parentPath: data.parentPath,
+          fileItems: data.items,
+          currentProject: matchedProject || null,
+        });
+      } else {
+        // projects가 비어있으면 currentProject는 유지
+        set({
+          currentPath: data.currentPath,
+          parentPath: data.parentPath,
+          fileItems: data.items,
+        });
+      }
     } catch (error) {
       console.error('Failed to navigate to path:', error);
       set({ fileItems: [] });

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { FolderOpen, ChevronUp, Home, RefreshCw } from 'lucide-react';
+import { FolderOpen, ArrowUpFromLine, Home, RefreshCw, ExternalLink } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import FileTreeItem from './FileTreeItem';
 
@@ -64,6 +64,19 @@ export default function FileExplorer({ className = '' }: FileExplorerProps) {
     fetchFiles(currentPath);
   };
 
+  const handleOpenInFinder = async () => {
+    if (!currentPath) return;
+    try {
+      await fetch('/api/open-in-finder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: currentPath }),
+      });
+    } catch (error) {
+      console.error('Failed to open in Finder:', error);
+    }
+  };
+
   return (
     <div className={`flex flex-col bg-surface ${className}`}>
       {/* Header */}
@@ -74,28 +87,35 @@ export default function FileExplorer({ className = '' }: FileExplorerProps) {
             {displayPath}
           </span>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           <button
             onClick={handleGoHome}
-            className="p-1 hover:bg-surface-hover rounded transition-colors"
+            className="p-1.5 hover:bg-surface-hover rounded transition-colors"
             title="Go to makecc home"
           >
-            <Home className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+            <Home className="w-4 h-4 text-gray-500 hover:text-gray-300" />
           </button>
           <button
             onClick={handleGoUp}
             disabled={!parentPath}
-            className="p-1 hover:bg-surface-hover rounded transition-colors disabled:opacity-30"
-            title="Go up"
+            className="p-1.5 hover:bg-surface-hover rounded transition-colors disabled:opacity-30"
+            title="상위 폴더"
           >
-            <ChevronUp className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+            <ArrowUpFromLine className="w-4 h-4 text-gray-500 hover:text-gray-300" />
+          </button>
+          <button
+            onClick={handleOpenInFinder}
+            className="p-1.5 hover:bg-surface-hover rounded transition-colors"
+            title="파인더에서 보기"
+          >
+            <ExternalLink className="w-4 h-4 text-gray-500 hover:text-gray-300" />
           </button>
           <button
             onClick={handleRefresh}
-            className="p-1 hover:bg-surface-hover rounded transition-colors"
+            className="p-1.5 hover:bg-surface-hover rounded transition-colors"
             title="Refresh"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-gray-500 hover:text-gray-300 ${isLoadingFiles ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-gray-500 hover:text-gray-300 ${isLoadingFiles ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>

@@ -1,4 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { skillGeneratorService } from './skillGeneratorService';
 
 // API 설정 타입
@@ -6,6 +8,7 @@ export interface ApiSettings {
   apiMode: 'proxy' | 'direct';
   apiKey?: string;
   proxyUrl?: string;
+  projectPath?: string; // makecc 프로젝트 경로 (스킬/에이전트 저장 위치)
 }
 
 // 진행 상황 콜백
@@ -337,7 +340,7 @@ export class WorkflowAIService {
       }
     }
 
-    // 4. 각 에이전트 확장 (상세 systemPrompt 생성)
+    // 4. 각 에이전트 확장 (상세 systemPrompt 생성) + 파일 저장
     for (const agent of agents) {
       current++;
       onProgress?.({
@@ -350,6 +353,11 @@ export class WorkflowAIService {
       try {
         const expandedPrompt = await this.expandAgentPrompt(agent, result, settings);
         agent.config.systemPrompt = expandedPrompt;
+
+        // 에이전트 파일로 저장
+        if (settings?.projectPath) {
+          await this.saveAgentFile(agent, expandedPrompt, settings.projectPath);
+        }
       } catch (error) {
         console.error(`Failed to expand agent ${agent.label}:`, error);
         // 실패해도 계속 진행
@@ -460,6 +468,43 @@ ${agent.config.systemPrompt ? `기존 프롬프트 (확장 필요):\n${agent.con
     }
 
     return result.trim() || agent.config.systemPrompt || agent.description;
+  }
+
+  /**
+   * 에이전트를 .claude/agents/에이전트명.md 파일로 저장
+   */
+  private async saveAgentFile(
+    agent: AIGeneratedNode,
+    systemPrompt: string,
+    projectPath: string
+  ): Promise<void> {
+    const agentName = agent.label
+      .toLowerCase()
+      .replace(/[^a-z0-9가-힣-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    const agentsDir = join(projectPath, '.claude', 'agents');
+    const agentPath = join(agentsDir, `${agentName}.md`);
+
+    await fs.mkdir(agentsDir, { recursive: true });
+
+    // Frontmatter 구성
+    const tools = agent.config.tools?.join(', ') || 'Read, Write, Bash';
+    const model = agent.config.model || 'sonnet';
+
+    const content = `---
+name: ${agentName}
+description: ${agent.description || agent.label}
+tools: ${tools}
+model: ${model}
+---
+
+${systemPrompt}
+`;
+
+    await fs.writeFile(agentPath, content, 'utf-8');
+    console.log(`Saved agent to: ${agentPath}`);
   }
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import Header from '../layout/Header';
@@ -13,18 +14,60 @@ import { useProjectStore } from '../../stores/projectStore';
 import { loadClaudeConfig } from '../../services/configLoader';
 
 export default function WorkflowBuilder() {
+  const navigate = useNavigate();
+  const { projectName } = useParams<{ projectName: string }>();
   const { isCollapsed, width } = usePanelStore();
   const { mergeExistingConfig, clearWorkflow } = useWorkflowStore();
-  const { currentProject, navigateToPath } = useProjectStore();
+  const { currentProject, navigateToPath, projects, fetchProjects, setCurrentProject } = useProjectStore();
   const initialLoadDone = useRef(false);
   const lastProjectPath = useRef<string | null>(null);
+  const hadProject = useRef(false);
+  const projectRestoredRef = useRef(false);
+
+  // Restore project from URL on page refresh
+  useEffect(() => {
+    if (!projectName || projectRestoredRef.current) return;
+
+    // If currentProject already matches URL, no need to restore
+    if (currentProject?.name === decodeURIComponent(projectName)) {
+      projectRestoredRef.current = true;
+      return;
+    }
+
+    // If projects not loaded yet, fetch them
+    if (projects.length === 0) {
+      fetchProjects();
+      return;
+    }
+
+    // Find project by name from URL
+    const decodedName = decodeURIComponent(projectName);
+    const project = projects.find((p) => p.name === decodedName);
+
+    if (project) {
+      setCurrentProject(project);
+      projectRestoredRef.current = true;
+    } else {
+      // Project not found, redirect to home
+      console.warn(`Project "${decodedName}" not found, redirecting to home`);
+      navigate('/');
+    }
+  }, [projectName, projects, currentProject, fetchProjects, setCurrentProject, navigate]);
 
   // Navigate file explorer to project path on mount
   useEffect(() => {
     if (currentProject?.path) {
       navigateToPath(currentProject.path);
+      hadProject.current = true;
     }
   }, [currentProject?.path, navigateToPath]);
+
+  // Navigate to home when currentProject becomes null (e.g., Explorer home button)
+  useEffect(() => {
+    if (!currentProject && hadProject.current) {
+      navigate('/');
+    }
+  }, [currentProject, navigate]);
 
   // Load .claude/ config when project changes
   useEffect(() => {

@@ -132,6 +132,18 @@ app.delete('/api/projects/:id', async (req, res) => {
   }
 });
 
+// Copy a project
+app.post('/api/projects/:id/copy', async (req, res) => {
+  try {
+    const project = await projectService.copyProject(req.params.id);
+    res.json(project);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Copy project error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Get makecc home directory
 app.get('/api/makecc-home', (req, res) => {
   res.json({ path: projectService.getMakeccHome() });
@@ -158,7 +170,7 @@ app.get('/api/files', async (req, res) => {
 
     // Filter and map entries
     const items = entries
-      .filter((entry) => !entry.name.startsWith('.')) // Exclude hidden files
+      .filter((entry) => !entry.name.startsWith('.') || entry.name === '.claude') // Include .claude folder
       .map((entry) => ({
         name: entry.name,
         type: entry.isDirectory() ? 'folder' : 'file',
@@ -180,6 +192,39 @@ app.get('/api/files', async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('List files error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Open folder in Finder (macOS)
+app.post('/api/open-in-finder', async (req, res) => {
+  try {
+    const { path: targetPath } = req.body as { path: string };
+    const makeccHome = projectService.getMakeccHome();
+
+    // Security: Only allow paths within makecc home
+    const normalizedPath = join(targetPath);
+    if (!normalizedPath.startsWith(makeccHome)) {
+      return res.status(403).json({ message: 'Access denied: path outside makecc home' });
+    }
+
+    // Check if path exists
+    if (!existsSync(normalizedPath)) {
+      return res.status(404).json({ message: 'Path not found' });
+    }
+
+    // Open in Finder using macOS 'open' command
+    const { exec } = await import('child_process');
+    exec(`open "${normalizedPath}"`, (error) => {
+      if (error) {
+        console.error('Failed to open in Finder:', error);
+        return res.status(500).json({ message: 'Failed to open in Finder' });
+      }
+      res.json({ success: true });
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Open in Finder error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });
@@ -240,12 +285,12 @@ app.get('/api/settings/api-key', async (req, res) => {
 // Sync node to file system
 app.post('/api/sync/node', async (req, res) => {
   try {
-    const { node } = req.body;
+    const { node, projectPath } = req.body;
     if (!node) {
       return res.status(400).json({ message: 'Node data is required' });
     }
 
-    const result = await nodeSyncService.syncNode(node);
+    const result = await nodeSyncService.syncNode(node, projectPath);
     if (result.success) {
       res.json(result);
     } else {
@@ -260,12 +305,12 @@ app.post('/api/sync/node', async (req, res) => {
 // Delete node from file system
 app.delete('/api/sync/node', async (req, res) => {
   try {
-    const { node, nodes } = req.body;
+    const { node, nodes, projectPath } = req.body;
     if (!node) {
       return res.status(400).json({ message: 'Node data is required' });
     }
 
-    const result = await nodeSyncService.deleteNode(node, nodes);
+    const result = await nodeSyncService.deleteNode(node, nodes, projectPath);
     if (result.success) {
       res.json(result);
     } else {
@@ -280,12 +325,12 @@ app.delete('/api/sync/node', async (req, res) => {
 // Sync edge (connection) to file system
 app.post('/api/sync/edge', async (req, res) => {
   try {
-    const { edge, nodes } = req.body;
+    const { edge, nodes, projectPath } = req.body;
     if (!edge || !nodes) {
       return res.status(400).json({ message: 'Edge and nodes data are required' });
     }
 
-    const result = await nodeSyncService.syncEdge(edge, nodes);
+    const result = await nodeSyncService.syncEdge(edge, nodes, projectPath);
     if (result.success) {
       res.json(result);
     } else {
@@ -300,12 +345,12 @@ app.post('/api/sync/edge', async (req, res) => {
 // Remove edge from file system
 app.delete('/api/sync/edge', async (req, res) => {
   try {
-    const { edge, nodes } = req.body;
+    const { edge, nodes, projectPath } = req.body;
     if (!edge || !nodes) {
       return res.status(400).json({ message: 'Edge and nodes data are required' });
     }
 
-    const result = await nodeSyncService.removeEdge(edge, nodes);
+    const result = await nodeSyncService.removeEdge(edge, nodes, projectPath);
     if (result.success) {
       res.json(result);
     } else {
@@ -320,7 +365,7 @@ app.delete('/api/sync/edge', async (req, res) => {
 // Generate skill using AI
 app.post('/api/generate/skill', async (req, res) => {
   try {
-    const { prompt } = req.body as { prompt: string };
+    const { prompt, projectPath } = req.body as { prompt: string; projectPath?: string };
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ message: 'Prompt is required' });
@@ -330,12 +375,13 @@ app.post('/api/generate/skill', async (req, res) => {
     const apiKey = req.headers['x-api-key'] as string;
     const proxyUrl = req.headers['x-proxy-url'] as string;
 
-    console.log('Generating skill for prompt:', prompt);
+    console.log('Generating skill for prompt:', prompt, 'projectPath:', projectPath);
 
     const result = await skillGeneratorService.generate(prompt, {
       apiMode: apiMode as 'proxy' | 'direct',
       apiKey,
       proxyUrl,
+      projectPath,
     });
 
     if (result.success) {
@@ -371,7 +417,11 @@ app.get('/api/load/claude-config', async (req, res) => {
 // Generate workflow using AI
 app.post('/api/generate/workflow', async (req, res) => {
   try {
-    const { prompt, expand = true } = req.body as { prompt: string; expand?: boolean };
+    const { prompt, expand = true, projectPath } = req.body as {
+      prompt: string;
+      expand?: boolean;
+      projectPath?: string;
+    };
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ message: 'Prompt is required' });
@@ -382,12 +432,13 @@ app.post('/api/generate/workflow', async (req, res) => {
     const apiKey = req.headers['x-api-key'] as string;
     const proxyUrl = req.headers['x-proxy-url'] as string;
 
-    console.log('Generating workflow for prompt:', prompt, 'mode:', apiMode, 'expand:', expand);
+    console.log('Generating workflow for prompt:', prompt, 'mode:', apiMode, 'expand:', expand, 'projectPath:', projectPath);
 
     const settings = {
       apiMode: apiMode as 'proxy' | 'direct',
       apiKey,
       proxyUrl,
+      projectPath,
     };
 
     // expand=true (기본값)이면 재귀적으로 스킬/에이전트 상세 생성

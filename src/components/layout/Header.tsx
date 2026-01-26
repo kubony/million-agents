@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, Save, Download, Play, Trash2, RefreshCw, Home } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
 import { loadClaudeConfig } from '../../services/configLoader';
@@ -12,6 +13,7 @@ import type { ClaudeConfigExport } from '../../types/save';
 export default function Header() {
   const navigate = useNavigate();
   const { workflowName, setWorkflowName, isDraft, nodes, edges, clearWorkflow, mergeExistingConfig } = useWorkflowStore();
+  const { makeccHome, navigateToPath, setCurrentProject } = useProjectStore();
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
@@ -61,7 +63,14 @@ export default function Header() {
       {/* Left section */}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => {
+            // Navigate Explorer to makeccHome and clear currentProject
+            if (makeccHome) {
+              navigateToPath(makeccHome);
+            }
+            setCurrentProject(null);
+            navigate('/');
+          }}
           className="p-2 hover:bg-surface-hover rounded-lg transition-colors group"
           title="Back to Home"
         >

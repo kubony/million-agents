@@ -1,4 +1,12 @@
 import type { WorkflowNode, WorkflowEdge } from '../types/nodes';
+import { useProjectStore } from '../stores/projectStore';
+
+/**
+ * 현재 프로젝트 경로 가져오기
+ */
+function getProjectPath(): string | undefined {
+  return useProjectStore.getState().currentProject?.path;
+}
 
 interface NodeSyncData {
   id: string;
@@ -67,7 +75,10 @@ export async function syncNode(node: WorkflowNode): Promise<boolean> {
     const response = await fetch('/api/sync/node', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ node: toSyncData(node) }),
+      body: JSON.stringify({
+        node: toSyncData(node),
+        projectPath: getProjectPath(),
+      }),
     });
 
     if (!response.ok) {
@@ -97,6 +108,7 @@ export async function deleteNode(node: WorkflowNode, allNodes: WorkflowNode[]): 
       body: JSON.stringify({
         node: toSyncData(node),
         nodes: allNodes.map(toSyncData),
+        projectPath: getProjectPath(),
       }),
     });
 
@@ -146,6 +158,7 @@ export async function syncEdge(
           targetType: targetNode.type,
         },
         nodes: nodes.map(toSyncData),
+        projectPath: getProjectPath(),
       }),
     });
 
@@ -187,6 +200,7 @@ export async function removeEdge(
           targetType: targetNode.type,
         },
         nodes: nodes.map(toSyncData),
+        projectPath: getProjectPath(),
       }),
     });
 

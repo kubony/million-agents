@@ -239,6 +239,72 @@ ${sanitizedName}/
     await fs.rename(project.path, join(trashPath, trashName));
   }
 
+  async copyProject(projectId: string): Promise<Project> {
+    const projects = await this.listProjects();
+    const sourceProject = projects.find(p => p.id === projectId || p.name === projectId);
+
+    if (!sourceProject) {
+      throw new Error(`Project "${projectId}" not found`);
+    }
+
+    // Generate new name with copy suffix
+    let newName = `${sourceProject.name}-copy`;
+    let counter = 1;
+    while (existsSync(join(this.makeccHome, newName))) {
+      newName = `${sourceProject.name}-copy-${counter}`;
+      counter++;
+    }
+
+    const newProjectPath = join(this.makeccHome, newName);
+
+    // Recursively copy directory
+    await this.copyDirectory(sourceProject.path, newProjectPath);
+
+    // Update project.json with new id and name
+    const projectId2 = nanoid(10);
+    const now = new Date().toISOString();
+    const configPath = join(newProjectPath, 'project.json');
+
+    let config: { description?: string } = {};
+    if (existsSync(configPath)) {
+      const content = await fs.readFile(configPath, 'utf-8');
+      config = JSON.parse(content);
+    }
+
+    const newConfig = {
+      ...config,
+      id: projectId2,
+      name: newName,
+      createdAt: now,
+    };
+
+    await fs.writeFile(configPath, JSON.stringify(newConfig, null, 2));
+
+    // Return the new project info
+    const newProject = await this.loadProjectInfo(newProjectPath, newName);
+    if (!newProject) {
+      throw new Error('Failed to load copied project');
+    }
+
+    return newProject;
+  }
+
+  private async copyDirectory(src: string, dest: string): Promise<void> {
+    await fs.mkdir(dest, { recursive: true });
+    const entries = await fs.readdir(src, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const srcPath = join(src, entry.name);
+      const destPath = join(dest, entry.name);
+
+      if (entry.isDirectory()) {
+        await this.copyDirectory(srcPath, destPath);
+      } else {
+        await fs.copyFile(srcPath, destPath);
+      }
+    }
+  }
+
   async getProject(projectId: string): Promise<Project | null> {
     const projects = await this.listProjects();
     return projects.find(p => p.id === projectId || p.name === projectId) || null;

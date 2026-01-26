@@ -20,11 +20,14 @@ export default function HomePage() {
     isLoading,
     fetchProjects,
     createProject,
+    deleteProject,
+    copyProject,
     setCurrentProject,
     navigateToPath,
     homeScrollPosition,
     setHomeScrollPosition,
     currentProject,
+    makeccHome,
   } = useProjectStore();
 
   const { addLog } = useExecutionStore();
@@ -34,9 +37,33 @@ export default function HomePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Track previous currentProject to detect changes from Explorer navigation
+  const prevProjectRef = useRef<typeof currentProject>(currentProject);
+  const initialSyncDone = useRef(false);
+
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  // Sync Explorer to home when HomePage mounts
+  useEffect(() => {
+    if (makeccHome && !initialSyncDone.current) {
+      navigateToPath(makeccHome);
+      setCurrentProject(null);
+      initialSyncDone.current = true;
+    }
+  }, [makeccHome, navigateToPath, setCurrentProject]);
+
+  // Auto-navigate when currentProject changes via Explorer
+  useEffect(() => {
+    // Skip if initial sync not done yet
+    if (!initialSyncDone.current) return;
+
+    if (currentProject && currentProject !== prevProjectRef.current) {
+      navigate(`/project/${encodeURIComponent(currentProject.name)}`);
+    }
+    prevProjectRef.current = currentProject;
+  }, [currentProject, navigate]);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -73,6 +100,24 @@ export default function HomePage() {
     const project = await createProject(name, description);
     if (project) {
       handleProjectClick(project);
+    }
+  };
+
+  const handleCopyProject = async (project: typeof projects[0]) => {
+    addLog('info', `Copying project: ${project.name}`);
+    const copied = await copyProject(project.id);
+    if (copied) {
+      addLog('info', `Project copied: ${copied.name}`);
+    }
+  };
+
+  const handleDeleteProject = async (project: typeof projects[0]) => {
+    if (window.confirm(`"${project.name}" 프로젝트를 삭제하시겠습니까?`)) {
+      addLog('info', `Deleting project: ${project.name}`);
+      const success = await deleteProject(project.id);
+      if (success) {
+        addLog('info', `Project deleted: ${project.name}`);
+      }
     }
   };
 
@@ -162,6 +207,8 @@ export default function HomePage() {
                     project={project}
                     onClick={() => handleProjectClick(project)}
                     isSelected={currentProject?.id === project.id}
+                    onCopy={handleCopyProject}
+                    onDelete={handleDeleteProject}
                   />
                 ))}
               </div>

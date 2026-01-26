@@ -10,6 +10,7 @@ import type {
   AgentRole,
 } from '../types/nodes';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useProjectStore } from '../stores/projectStore';
 
 export interface GeneratedWorkflow {
   nodes: WorkflowNode[];
@@ -423,8 +424,13 @@ export function generateAndEnhanceWorkflow(prompt: string): GeneratedWorkflow {
 
 /**
  * AI 기반 워크플로우 생성 (서버 API 호출)
+ * @param prompt 워크플로우 설명 프롬프트
+ * @param projectPath 저장할 프로젝트 경로 (선택, 없으면 currentProject 사용)
  */
-export async function generateWorkflowWithAI(prompt: string): Promise<{
+export async function generateWorkflowWithAI(
+  prompt: string,
+  projectPath?: string
+): Promise<{
   workflow: GeneratedWorkflow;
   workflowName: string;
 }> {
@@ -432,6 +438,10 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
 
   // Get settings from store
   const { apiMode, apiKey, proxyUrl } = useSettingsStore.getState();
+  const { currentProject } = useProjectStore.getState();
+
+  // projectPath가 없으면 currentProject.path 사용
+  const targetPath = projectPath || currentProject?.path;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -448,7 +458,7 @@ export async function generateWorkflowWithAI(prompt: string): Promise<{
     response = await fetch('/api/generate/workflow', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, projectPath: targetPath }),
     });
   } catch (err) {
     throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');

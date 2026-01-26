@@ -1,4 +1,5 @@
 import { useSettingsStore } from '../stores/settingsStore';
+import { useProjectStore } from '../stores/projectStore';
 
 export interface GeneratedSkillFile {
   path: string;
@@ -49,9 +50,18 @@ export function isSkillGenerationRequest(prompt: string): boolean {
 
 /**
  * AI로 스킬 생성 (서버 API 호출)
+ * @param prompt 스킬 생성 프롬프트
+ * @param projectPath 저장할 프로젝트 경로 (선택, 없으면 currentProject 사용)
  */
-export async function generateSkill(prompt: string): Promise<SkillGenerationResult> {
+export async function generateSkill(
+  prompt: string,
+  projectPath?: string
+): Promise<SkillGenerationResult> {
   const { apiMode, apiKey, proxyUrl } = useSettingsStore.getState();
+  const { currentProject } = useProjectStore.getState();
+
+  // projectPath가 없으면 currentProject.path 사용
+  const targetPath = projectPath || currentProject?.path;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -68,7 +78,7 @@ export async function generateSkill(prompt: string): Promise<SkillGenerationResu
     const response = await fetch('/api/generate/skill', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, projectPath: targetPath }),
     });
 
     if (!response.ok) {

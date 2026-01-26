@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { FolderOpen, Settings2 } from 'lucide-react';
 import { useWorkflowStore, selectSelectedNode } from '../../stores/workflowStore';
 import FileExplorer from './FileExplorer';
 import PropertiesPanel from '../panels/PropertiesPanel';
+
+type TabType = 'explorer' | 'properties';
 
 interface RightSidebarProps {
   showProperties?: boolean;
@@ -10,58 +12,70 @@ interface RightSidebarProps {
 
 export default function RightSidebar({ showProperties = true }: RightSidebarProps) {
   const selectedNode = useWorkflowStore(selectSelectedNode);
-  const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('explorer');
+  const prevSelectedNode = useRef(selectedNode);
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* File Explorer Section */}
-      <div className={`flex flex-col transition-all ${
-        showProperties
-          ? (isExplorerCollapsed ? 'h-10' : 'flex-1 min-h-[200px]')
-          : 'flex-1'
-      } ${showProperties ? 'border-b border-border' : ''}`}>
-        {/* Explorer Header with Toggle */}
-        <button
-          onClick={() => setIsExplorerCollapsed(!isExplorerCollapsed)}
-          className="flex items-center justify-between px-3 py-2 hover:bg-surface-hover transition-colors flex-shrink-0"
-          disabled={!showProperties}
-        >
+  // Auto-switch to properties tab when a node is selected
+  useEffect(() => {
+    if (showProperties && selectedNode && selectedNode !== prevSelectedNode.current) {
+      setActiveTab('properties');
+    }
+    prevSelectedNode.current = selectedNode;
+  }, [selectedNode, showProperties]);
+
+  // If showProperties is false, only show Explorer (no tabs)
+  if (!showProperties) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center px-3 py-2 border-b border-border">
+          <FolderOpen className="w-4 h-4 text-amber-500 mr-2" />
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
             Explorer
           </span>
-          {showProperties && (
-            isExplorerCollapsed ? (
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            ) : (
-              <ChevronUp className="w-4 h-4 text-gray-500" />
-            )
-          )}
-        </button>
+        </div>
+        <FileExplorer className="flex-1 min-h-0" />
+      </div>
+    );
+  }
 
-        {/* File Explorer Content */}
-        {(!showProperties || !isExplorerCollapsed) && (
-          <FileExplorer className="flex-1 min-h-0" />
-        )}
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tab Bar */}
+      <div className="flex border-b border-border flex-shrink-0">
+        <button
+          onClick={() => setActiveTab('explorer')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+            activeTab === 'explorer'
+              ? 'text-white border-b-2 border-amber-500 bg-surface-hover'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-surface-hover'
+          }`}
+        >
+          <FolderOpen className="w-4 h-4" />
+          Explorer
+        </button>
+        <button
+          onClick={() => setActiveTab('properties')}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+            activeTab === 'properties'
+              ? 'text-white border-b-2 border-amber-500 bg-surface-hover'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-surface-hover'
+          }`}
+        >
+          <Settings2 className="w-4 h-4" />
+          Properties
+        </button>
       </div>
 
-      {/* Properties Section - only shown when showProperties is true */}
-      {showProperties && (
-        <div className={`flex flex-col transition-all ${
-          isExplorerCollapsed ? 'flex-1' : 'h-[45%]'
-        }`}>
-          {/* Properties Header */}
-          <div className="flex items-center px-3 py-2 border-b border-border flex-shrink-0">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Properties
-            </span>
-          </div>
-
-          {/* Properties Content */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+      {/* Tab Content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {activeTab === 'explorer' ? (
+          <FileExplorer className="h-full" />
+        ) : (
+          <div className="h-full overflow-y-auto">
             <PropertiesPanel node={selectedNode} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

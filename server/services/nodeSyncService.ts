@@ -30,16 +30,28 @@ interface EdgeData {
 }
 
 export class NodeSyncService {
+  private defaultProjectRoot: string;
+  // 현재 작업 중인 프로젝트 경로 (syncNode 호출 시 설정됨)
   private projectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.projectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
+    this.defaultProjectRoot = projectRoot || process.env.MAKECC_PROJECT_PATH || process.cwd();
+    this.projectRoot = this.defaultProjectRoot;
   }
 
   /**
    * 노드 생성/수정 시 파일 동기화
+   * @param node 동기화할 노드
+   * @param projectPath 프로젝트 경로 (선택, 없으면 기본값 사용)
    */
-  async syncNode(node: NodeData): Promise<{ success: boolean; path?: string; error?: string }> {
+  async syncNode(
+    node: NodeData,
+    projectPath?: string
+  ): Promise<{ success: boolean; path?: string; error?: string }> {
+    // 프로젝트 경로 설정 (이 호출 동안 사용됨)
+    this.projectRoot = projectPath || this.defaultProjectRoot;
+    console.log(`Syncing node to project: ${this.projectRoot}`);
+
     try {
       switch (node.type) {
         case 'skill':
@@ -63,8 +75,14 @@ export class NodeSyncService {
 
   /**
    * 노드 삭제 시 파일 삭제 및 관련 참조 정리
+   * @param projectPath 프로젝트 경로 (선택)
    */
-  async deleteNode(node: NodeData, allNodes?: NodeData[]): Promise<{ success: boolean; error?: string }> {
+  async deleteNode(
+    node: NodeData,
+    allNodes?: NodeData[],
+    projectPath?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    this.projectRoot = projectPath || this.defaultProjectRoot;
     try {
       const nodeId = this.getNodeIdentifier(node);
 
@@ -131,8 +149,14 @@ export class NodeSyncService {
    * 엣지 연결 시 관계 업데이트
    * - source의 downstream에 target 추가
    * - target의 upstream에 source 추가
+   * @param projectPath 프로젝트 경로 (선택)
    */
-  async syncEdge(edge: EdgeData, nodes: NodeData[]): Promise<{ success: boolean; error?: string }> {
+  async syncEdge(
+    edge: EdgeData,
+    nodes: NodeData[],
+    projectPath?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    this.projectRoot = projectPath || this.defaultProjectRoot;
     try {
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
@@ -231,8 +255,14 @@ export class NodeSyncService {
 
   /**
    * 엣지 삭제 시 관계 업데이트
+   * @param projectPath 프로젝트 경로 (선택)
    */
-  async removeEdge(edge: EdgeData, nodes: NodeData[]): Promise<{ success: boolean; error?: string }> {
+  async removeEdge(
+    edge: EdgeData,
+    nodes: NodeData[],
+    projectPath?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    this.projectRoot = projectPath || this.defaultProjectRoot;
     try {
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
