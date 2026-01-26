@@ -9,6 +9,7 @@ import type { WorkflowNode, AgentNodeData, InputNodeData, SkillNodeData, HookNod
 import { AVAILABLE_TOOLS } from '../../types/nodes';
 import { AVAILABLE_SKILLS } from '../../data/availableSkills';
 import AIGenerateModal, { type GeneratedContent } from '../modals/AIGenerateModal';
+import CredentialsSetupModal from '../modals/CredentialsSetupModal';
 
 const NODE_TYPE_NAMES: Record<string, string> = {
   agent: '에이전트',
@@ -659,12 +660,15 @@ function SkillSettings({
   data: SkillNodeData;
   onUpdate: (data: Partial<SkillNodeData>) => void;
 }) {
+  const { currentProject } = useProjectStore();
   const [files, setFiles] = useState<SkillFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [testArgs, setTestArgs] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<SkillTestResult | null>(null);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [pendingTestAfterCredentials, setPendingTestAfterCredentials] = useState(false);
 
   // 생성된 스킬인 경우 파일 불러오기
   useEffect(() => {
@@ -685,6 +689,38 @@ function SkillSettings({
         .finally(() => setLoading(false));
     }
   }, [data.skillPath, data.skillType]);
+
+  // Check credentials before running test
+  const checkAndRunTest = async () => {
+    if (!data.skillPath || !currentProject?.path) return;
+
+    // Check credentials first
+    try {
+      const response = await fetch(
+        `/api/skill/credentials?skillPath=${encodeURIComponent(data.skillPath)}&projectPath=${encodeURIComponent(currentProject.path)}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        // If there are unconfigured required credentials, show modal
+        const hasUnconfigured = result.credentials?.some(
+          (c: { credential: { required: boolean }; configured: boolean }) =>
+            c.credential.required && !c.configured
+        );
+
+        if (hasUnconfigured) {
+          setPendingTestAfterCredentials(true);
+          setShowCredentialsModal(true);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check credentials:', err);
+    }
+
+    // Run test directly if no credentials needed or all configured
+    runTest();
+  };
 
   // 스킬 테스트 실행
   const runTest = async () => {
@@ -710,6 +746,14 @@ function SkillSettings({
       });
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Handle credentials setup complete
+  const handleCredentialsComplete = () => {
+    if (pendingTestAfterCredentials) {
+      setPendingTestAfterCredentials(false);
+      runTest();
     }
   };
 
@@ -812,7 +856,7 @@ function SkillSettings({
 
             {/* 실행 버튼 */}
             <button
-              onClick={runTest}
+              onClick={checkAndRunTest}
               disabled={testing}
               className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
                 testing
@@ -881,6 +925,21 @@ function SkillSettings({
             )}
           </div>
         </div>
+
+        {/* Credentials Setup Modal */}
+        {data.skillPath && currentProject?.path && (
+          <CredentialsSetupModal
+            isOpen={showCredentialsModal}
+            onClose={() => {
+              setShowCredentialsModal(false);
+              setPendingTestAfterCredentials(false);
+            }}
+            skillName={data.skillId || 'Skill'}
+            skillPath={data.skillPath}
+            projectPath={currentProject.path}
+            onComplete={handleCredentialsComplete}
+          />
+        )}
       </>
     );
   }

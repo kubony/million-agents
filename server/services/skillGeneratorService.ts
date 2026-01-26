@@ -5,6 +5,7 @@ import { existsSync } from 'fs';
 import { spawn } from 'child_process';
 import type { ApiSettings } from './workflowAIService';
 import { claudeMdService } from './claudeMdService';
+import { credentialsService } from './credentialsService';
 import {
   checkCommandExists,
   getVenvPythonPath,
@@ -12,10 +13,20 @@ import {
   isWindows,
 } from '../utils/platform';
 
+export interface SkillCredential {
+  type: 'api_key' | 'service_account' | 'oauth';
+  envVar: string;  // Environment variable name or filename
+  service: string; // Service name (e.g., "Google Cloud", "OpenAI")
+  description: string; // Description in Korean
+  setupUrl: string; // URL to setup page
+  required: boolean;
+}
+
 export interface GeneratedSkill {
   skillName: string;
   skillId: string;
   description: string;
+  credentials?: SkillCredential[];
   files: Array<{
     path: string;
     content: string;
@@ -68,6 +79,16 @@ RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO CODE BLOCKS, NO EXPLANAT
   "skillName": "Human Readable Skill Name",
   "skillId": "skill-id-in-kebab-case",
   "description": "Comprehensive description including what it does AND when to use it. Include trigger phrases in Korean. Example: 'PDF 문서에서 텍스트 추출 및 분석. \\"PDF 읽어줘\\", \\"PDF 분석해줘\\", \\"PDF에서 텍스트 추출\\" 등의 요청 시 사용.'",
+  "credentials": [
+    {
+      "type": "api_key",
+      "envVar": "GOOGLE_API_KEY",
+      "service": "Google Cloud",
+      "description": "Google Cloud API 키",
+      "setupUrl": "https://console.cloud.google.com/apis/credentials",
+      "required": true
+    }
+  ],
   "files": [
     {
       "path": "SKILL.md",
@@ -86,6 +107,29 @@ RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO CODE BLOCKS, NO EXPLANAT
     }
   ]
 }
+
+## Credentials Field Rules
+
+The "credentials" array should list ALL external API keys, service accounts, or OAuth credentials needed by the skill.
+- If no credentials are needed, use an empty array: "credentials": []
+- Types: "api_key" (stored in .env), "service_account" (JSON file in .credentials/), "oauth" (tokens in .credentials/)
+
+For each credential, provide:
+- type: "api_key" | "service_account" | "oauth"
+- envVar: Environment variable name (for api_key) or filename (for service_account/oauth)
+- service: Service name (e.g., "Google Cloud", "OpenAI", "GitHub")
+- description: What this credential is for (in Korean)
+- setupUrl: URL to the setup/console page where user can get this credential
+- required: true if skill cannot work without it
+
+Common services and their setup URLs:
+- Google Cloud: https://console.cloud.google.com/apis/credentials
+- Google Gmail API: https://console.cloud.google.com/apis/library/gmail.googleapis.com
+- OpenAI: https://platform.openai.com/api-keys
+- GitHub: https://github.com/settings/tokens
+- Notion: https://www.notion.so/my-integrations
+- Slack: https://api.slack.com/apps
+- Twitter/X: https://developer.twitter.com/en/portal/dashboard
 
 ## SKILL.md Format (MUST follow exactly)
 
@@ -148,6 +192,8 @@ The script MUST:
 5. Check dependencies at startup with helpful install instructions
 6. Support common use cases with sensible defaults
 7. Include docstring with usage examples
+8. Load credentials from .env file (for API keys) using python-dotenv
+9. Load service account JSON from .credentials/ folder if needed
 
 ## Script Template Structure
 
@@ -164,8 +210,44 @@ Examples:
 """
 
 import argparse
+import os
 import sys
+import json
 from pathlib import Path
+
+# Load environment variables from .env file
+def load_credentials():
+    """Load API keys from .env and credentials from .credentials/"""
+    # Find project root (where .env is located)
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        env_file = parent / '.env'
+        if env_file.exists():
+            # Load .env file
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file)
+                return True
+            except ImportError:
+                # Manual loading if dotenv not available
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            os.environ[key.strip()] = value.strip().strip('"').strip("'")
+                return True
+    return False
+
+def get_service_account(filename):
+    """Load service account JSON from .credentials/ folder"""
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        cred_file = parent / '.credentials' / filename
+        if cred_file.exists():
+            with open(cred_file, 'r') as f:
+                return json.load(f)
+    return None
 
 def check_dependencies():
     """Check required packages"""
@@ -393,6 +475,13 @@ Generate complete, working code. Respond with JSON only.${claudeMdContext}`;
       // 파일 저장
       const skillPath = path.join(projectRoot, '.claude', 'skills', skill.skillId);
       await this.saveSkillFiles(skillPath, skill.files);
+
+      // credentials.json 저장 (필요한 인증 정보 메타데이터)
+      if (skill.credentials && skill.credentials.length > 0) {
+        await credentialsService.saveCredentialsMetadata(skillPath, skill.credentials);
+        // .gitignore에 credentials 관련 항목 추가
+        await credentialsService.ensureGitignore(projectRoot);
+      }
 
       // requirements.txt가 있으면 의존성 설치
       const requirementsPath = path.join(skillPath, 'requirements.txt');

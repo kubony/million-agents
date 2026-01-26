@@ -29,6 +29,7 @@ import { executeInTerminal, getClaudeCommand } from './services/terminalService'
 import { claudeMdService } from './services/claudeMdService';
 import { projectService } from './services/projectService';
 import { nodeContentService } from './services/nodeContentService';
+import { credentialsService } from './services/credentialsService';
 import type { WorkflowExecutionRequest, NodeExecutionUpdate } from './types';
 import type { ClaudeConfigExport, SaveOptions } from './services/fileService';
 
@@ -655,6 +656,54 @@ app.get('/api/skill/files', async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Read skill files error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Check skill credentials
+app.get('/api/skill/credentials', async (req, res) => {
+  try {
+    const skillPath = req.query.skillPath as string;
+    const projectPath = req.query.projectPath as string;
+
+    if (!skillPath || !projectPath) {
+      return res.status(400).json({ message: 'skillPath and projectPath are required' });
+    }
+
+    const result = await credentialsService.checkCredentials(skillPath, projectPath);
+    res.json(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Check credentials error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Save skill credential
+app.post('/api/skill/credentials', async (req, res) => {
+  try {
+    const { credential, value, projectPath } = req.body as {
+      credential: {
+        type: 'api_key' | 'service_account' | 'oauth';
+        envVar: string;
+        service: string;
+        description: string;
+        setupUrl: string;
+        required: boolean;
+      };
+      value: string;
+      projectPath: string;
+    };
+
+    if (!credential || !value || !projectPath) {
+      return res.status(400).json({ message: 'credential, value, and projectPath are required' });
+    }
+
+    await credentialsService.saveCredential(credential, value, projectPath);
+    res.json({ success: true });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Save credential error:', errorMessage);
     res.status(500).json({ message: errorMessage });
   }
 });
