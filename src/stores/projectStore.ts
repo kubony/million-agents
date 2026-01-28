@@ -1,12 +1,15 @@
 import { create } from 'zustand';
-import type { Project, GalleryItem } from '../types/project';
+import type { Project, GalleryItem, GallerySkill } from '../types/project';
 import type { FileItem } from '../types/file';
 
 interface ProjectStore {
   // State
   projects: Project[];
   galleryItems: GalleryItem[];
+  gallerySkills: GallerySkill[];
   isLoading: boolean;
+  isLoadingGallery: boolean;
+  installingSkillId: string | null;
   error: string | null;
   currentProject: Project | null;
 
@@ -31,6 +34,11 @@ interface ProjectStore {
   deleteProject: (id: string) => Promise<boolean>;
   copyProject: (id: string) => Promise<Project | null>;
 
+  // Gallery actions
+  fetchGallerySkills: () => Promise<void>;
+  installSkill: (skillId: string) => Promise<{ success: boolean; message: string }>;
+  uninstallSkill: (skillId: string) => Promise<{ success: boolean; message: string }>;
+
   // File explorer actions
   fetchFiles: (path?: string) => Promise<void>;
   navigateToPath: (path: string) => Promise<void>;
@@ -44,7 +52,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   // Initial state
   projects: [],
   galleryItems: [],
+  gallerySkills: [],
   isLoading: false,
+  isLoadingGallery: false,
+  installingSkillId: null,
   error: null,
   currentProject: null,
 
@@ -256,4 +267,74 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   // UI state actions
   setHomeScrollPosition: (position: number) => set({ homeScrollPosition: position }),
+
+  // Gallery actions
+  fetchGallerySkills: async () => {
+    set({ isLoadingGallery: true });
+    try {
+      const response = await fetch('/api/gallery/skills');
+      if (!response.ok) {
+        throw new Error('Failed to fetch gallery skills');
+      }
+      const data = await response.json();
+      set({ gallerySkills: data.skills || [] });
+    } catch (error) {
+      console.error('Failed to fetch gallery skills:', error);
+      set({ gallerySkills: [] });
+    } finally {
+      set({ isLoadingGallery: false });
+    }
+  },
+
+  installSkill: async (skillId: string) => {
+    set({ installingSkillId: skillId });
+    try {
+      const response = await fetch(`/api/gallery/skills/${skillId}/install`, {
+        method: 'POST',
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the installed status in gallerySkills
+        set((state) => ({
+          gallerySkills: state.gallerySkills.map((skill) =>
+            skill.id === skillId ? { ...skill, installed: true } : skill
+          ),
+        }));
+      }
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, message };
+    } finally {
+      set({ installingSkillId: null });
+    }
+  },
+
+  uninstallSkill: async (skillId: string) => {
+    set({ installingSkillId: skillId });
+    try {
+      const response = await fetch(`/api/gallery/skills/${skillId}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the installed status in gallerySkills
+        set((state) => ({
+          gallerySkills: state.gallerySkills.map((skill) =>
+            skill.id === skillId ? { ...skill, installed: false } : skill
+          ),
+        }));
+      }
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, message };
+    } finally {
+      set({ installingSkillId: null });
+    }
+  },
 }));

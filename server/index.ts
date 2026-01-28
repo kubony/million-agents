@@ -81,12 +81,60 @@ app.get('/api/project-path', (req, res) => {
 app.get('/api/projects', async (req, res) => {
   try {
     const projects = await projectService.listProjects();
-    const gallery = projectService.getGalleryItems();
-    res.json({ projects, gallery });
+    // Legacy gallery field for backward compatibility
+    res.json({ projects, gallery: [] });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('List projects error:', errorMessage);
     res.status(500).json({ message: errorMessage });
+  }
+});
+
+// ============================================
+// Gallery API (Community Skills)
+// ============================================
+
+// Get gallery skills from GitHub
+app.get('/api/gallery/skills', async (req, res) => {
+  try {
+    const skills = await projectService.fetchGallerySkills();
+    res.json({ skills });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Fetch gallery error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Install a skill from gallery
+app.post('/api/gallery/skills/:id/install', async (req, res) => {
+  try {
+    const result = await projectService.installGallerySkill(req.params.id);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Install skill error:', errorMessage);
+    res.status(500).json({ success: false, message: errorMessage });
+  }
+});
+
+// Uninstall a skill
+app.delete('/api/gallery/skills/:id', async (req, res) => {
+  try {
+    const result = await projectService.uninstallSkill(req.params.id);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Uninstall skill error:', errorMessage);
+    res.status(500).json({ success: false, message: errorMessage });
   }
 });
 

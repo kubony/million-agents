@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Settings } from 'lucide-react';
+import { Plus, Search, Settings, RefreshCw } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExecutionStore } from '../../stores/executionStore';
 import ProjectCard from './ProjectCard';
-import GalleryCard from './GalleryCard';
+import SkillCard from './SkillCard';
 import CreateProjectDialog from './CreateProjectDialog';
 import SettingsDialog from '../dialogs/SettingsDialog';
 import RightSidebar from '../layout/RightSidebar';
@@ -16,9 +16,14 @@ export default function HomePage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const {
     projects,
-    galleryItems,
+    gallerySkills,
     isLoading,
+    isLoadingGallery,
+    installingSkillId,
     fetchProjects,
+    fetchGallerySkills,
+    installSkill,
+    uninstallSkill,
     createProject,
     deleteProject,
     copyProject,
@@ -43,7 +48,8 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    fetchGallerySkills();
+  }, [fetchProjects, fetchGallerySkills]);
 
   // Sync Explorer to home when HomePage mounts
   useEffect(() => {
@@ -121,10 +127,37 @@ export default function HomePage() {
     }
   };
 
-  const filteredGallery = galleryItems.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const filteredSkills = gallerySkills.filter((skill) => {
+    const matchesSearch =
+      skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      skill.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || skill.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = ['all', ...new Set(gallerySkills.map((s) => s.category))];
+
+  const handleInstallSkill = async (skillId: string) => {
+    const result = await installSkill(skillId);
+    if (result.success) {
+      addLog('info', `Skill "${skillId}" installed successfully`);
+    } else {
+      addLog('error', `Failed to install skill: ${result.message}`);
+    }
+  };
+
+  const handleUninstallSkill = async (skillId: string) => {
+    if (window.confirm(`"${skillId}" 스킬을 삭제하시겠습니까?`)) {
+      const result = await uninstallSkill(skillId);
+      if (result.success) {
+        addLog('info', `Skill "${skillId}" uninstalled`);
+      } else {
+        addLog('error', `Failed to uninstall skill: ${result.message}`);
+      }
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-canvas overflow-hidden">
@@ -215,36 +248,73 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* Gallery section */}
-          <section className="max-w-4xl mx-auto pb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Gallery</h2>
-              <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg">
-                <Search className="w-4 h-4 text-gray-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search"
-                  className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 w-40"
-                />
+          {/* Skill Gallery section */}
+          <section className="max-w-5xl mx-auto pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-white">Skill Gallery</h2>
+                <span className="px-2 py-0.5 text-xs font-medium bg-accent/20 text-accent rounded-full">
+                  {gallerySkills.length} skills
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => fetchGallerySkills()}
+                  disabled={isLoadingGallery}
+                  className="p-2 hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoadingGallery ? 'animate-spin' : ''}`} />
+                </button>
+                <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg">
+                  <Search className="w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search skills..."
+                    className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 w-40"
+                  />
+                </div>
               </div>
             </div>
 
-            {filteredGallery.length === 0 ? (
+            {/* Category filter */}
+            <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors ${
+                    selectedCategory === category
+                      ? 'bg-accent text-white'
+                      : 'bg-surface border border-border text-gray-400 hover:text-white hover:border-gray-600'
+                  }`}
+                >
+                  {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')}
+                </button>
+              ))}
+            </div>
+
+            {isLoadingGallery ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : filteredSkills.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
-                {searchQuery ? 'No templates found' : 'Gallery templates coming soon'}
+                {searchQuery || selectedCategory !== 'all'
+                  ? 'No skills found matching your criteria'
+                  : 'No skills available'}
               </div>
             ) : (
               <div className="flex flex-wrap gap-4">
-                {filteredGallery.map((item) => (
-                  <GalleryCard
-                    key={item.id}
-                    item={item}
-                    onClick={() => {
-                      // TODO: Clone from gallery
-                      console.log('Clone gallery item:', item.id);
-                    }}
+                {filteredSkills.map((skill) => (
+                  <SkillCard
+                    key={skill.id}
+                    skill={skill}
+                    isInstalling={installingSkillId === skill.id}
+                    onInstall={() => handleInstallSkill(skill.id)}
+                    onUninstall={() => handleUninstallSkill(skill.id)}
                   />
                 ))}
               </div>

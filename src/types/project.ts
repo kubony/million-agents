@@ -21,3 +21,30 @@ export interface GalleryItem {
   downloads: number;
   tags: string[];
 }
+
+export type SkillSource = 'global' | 'local' | 'gallery';
+
+export interface SkillItem {
+  id: string;
+  name: string;
+  description: string;
+  source: SkillSource;
+  path: string;
+  tags: string[];
+  hasScripts: boolean;
+  hasRequirements: boolean;
+}
+
+export interface GallerySkill {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  author: string;
+  repo: string;
+  path: string;
+  hasScripts: boolean;
+  hasRequirements: boolean;
+  installed?: boolean;
+}

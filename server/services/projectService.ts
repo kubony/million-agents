@@ -25,39 +25,56 @@ export interface GalleryItem {
   tags: string[];
 }
 
+export type SkillSource = 'global' | 'local' | 'gallery';
+
+export interface SkillItem {
+  id: string;
+  name: string;
+  description: string;
+  source: SkillSource;
+  path: string;
+  tags: string[];
+  hasScripts: boolean;
+  hasRequirements: boolean;
+}
+
 // Default makecc home directory
 const MAKECC_HOME = process.env.MAKECC_HOME || join(homedir(), 'makecc');
 
-// Gallery items (static for now, could be fetched from a registry later)
-const GALLERY_ITEMS: GalleryItem[] = [
-  {
-    id: 'gmail-assistant',
-    name: 'Gmail Assistant',
-    description: 'Read, write and organize emails using Claude',
-    thumbnail: '/gallery/gmail.png',
-    author: 'makecc',
-    downloads: 1234,
-    tags: ['email', 'productivity'],
-  },
-  {
-    id: 'web-scraper',
-    name: 'Web Scraper',
-    description: 'Extract data from websites automatically',
-    thumbnail: '/gallery/scraper.png',
-    author: 'makecc',
-    downloads: 892,
-    tags: ['data', 'automation'],
-  },
-  {
-    id: 'document-analyzer',
-    name: 'Document Analyzer',
-    description: 'Analyze and summarize PDF documents',
-    thumbnail: '/gallery/docs.png',
-    author: 'makecc',
-    downloads: 567,
-    tags: ['pdf', 'analysis'],
-  },
-];
+// Gallery configuration
+const GALLERY_REPO = 'kubony/makecc-gallery';
+const GALLERY_RAW_URL = `https://raw.githubusercontent.com/${GALLERY_REPO}/main`;
+const GALLERY_JSON_URL = `${GALLERY_RAW_URL}/gallery.json`;
+
+// Cache for gallery data
+let galleryCache: { data: GallerySkill[] | null; timestamp: number } = {
+  data: null,
+  timestamp: 0,
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export interface GallerySkill {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  author: string;
+  repo: string;
+  path: string;
+  hasScripts: boolean;
+  hasRequirements: boolean;
+  installed?: boolean;
+}
+
+// GitHub API content response type
+interface GitHubContent {
+  name: string;
+  path: string;
+  type: 'file' | 'dir';
+  url: string;
+  download_url?: string;
+}
 
 class ProjectService {
   private makeccHome: string;
@@ -310,8 +327,310 @@ ${sanitizedName}/
     return projects.find(p => p.id === projectId || p.name === projectId) || null;
   }
 
+  /**
+   * Fetch gallery skills from GitHub
+   */
+  async fetchGallerySkills(): Promise<GallerySkill[]> {
+    // Check cache
+    const now = Date.now();
+    if (galleryCache.data && now - galleryCache.timestamp < CACHE_TTL) {
+      return this.markInstalledSkills(galleryCache.data);
+    }
+
+    try {
+      const response = await fetch(GALLERY_JSON_URL);
+      if (!response.ok) {
+        console.error(`Failed to fetch gallery: ${response.status}`);
+        return galleryCache.data ? this.markInstalledSkills(galleryCache.data) : [];
+      }
+
+      const data = await response.json() as { skills?: GallerySkill[] };
+      const skills = data.skills || [];
+
+      // Update cache
+      galleryCache = { data: skills, timestamp: now };
+
+      return this.markInstalledSkills(skills);
+    } catch (error) {
+      console.error('Error fetching gallery:', error);
+      return galleryCache.data ? this.markInstalledSkills(galleryCache.data) : [];
+    }
+  }
+
+  /**
+   * Mark skills that are already installed
+   */
+  private async markInstalledSkills(skills: GallerySkill[]): Promise<GallerySkill[]> {
+    const globalSkillsPath = join(homedir(), '.claude', 'skills');
+
+    return Promise.all(
+      skills.map(async (skill) => {
+        const skillPath = join(globalSkillsPath, skill.id);
+        const installed = existsSync(skillPath);
+        return { ...skill, installed };
+      })
+    );
+  }
+
+  /**
+   * Install a skill from gallery to ~/.claude/skills/
+   */
+  async installGallerySkill(skillId: string): Promise<{ success: boolean; message: string; path?: string }> {
+    const globalSkillsPath = join(homedir(), '.claude', 'skills');
+    const targetPath = join(globalSkillsPath, skillId);
+
+    // Check if already installed
+    if (existsSync(targetPath)) {
+      return { success: false, message: `Skill "${skillId}" is already installed` };
+    }
+
+    try {
+      // Fetch the skill files from GitHub
+      const skillUrl = `${GALLERY_RAW_URL}/skills/${skillId}`;
+
+      // First, get the list of files in the skill directory via GitHub API
+      const apiUrl = `https://api.github.com/repos/${GALLERY_REPO}/contents/skills/${skillId}`;
+      const response = await fetch(apiUrl);
+
+      if (!response.ok) {
+        return { success: false, message: `Skill "${skillId}" not found in gallery` };
+      }
+
+      const files = await response.json() as GitHubContent[];
+
+      // Create skill directory
+      await fs.mkdir(targetPath, { recursive: true });
+
+      // Download each file
+      await this.downloadSkillFiles(files, skillUrl, targetPath);
+
+      return {
+        success: true,
+        message: `Skill "${skillId}" installed successfully`,
+        path: targetPath,
+      };
+    } catch (error) {
+      // Clean up on failure
+      try {
+        await fs.rm(targetPath, { recursive: true, force: true });
+      } catch {}
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, message: `Failed to install skill: ${message}` };
+    }
+  }
+
+  /**
+   * Recursively download skill files from GitHub
+   */
+  private async downloadSkillFiles(items: GitHubContent[], baseUrl: string, targetDir: string): Promise<void> {
+    for (const item of items) {
+      const targetPath = join(targetDir, item.name);
+
+      if (item.type === 'dir') {
+        // Create subdirectory and fetch its contents
+        await fs.mkdir(targetPath, { recursive: true });
+        const subResponse = await fetch(item.url);
+        const subItems = await subResponse.json() as GitHubContent[];
+        await this.downloadSkillFiles(subItems, `${baseUrl}/${item.name}`, targetPath);
+      } else if (item.type === 'file') {
+        // Download file
+        const fileUrl = `${baseUrl}/${item.name}`;
+        const fileResponse = await fetch(fileUrl);
+        const content = await fileResponse.text();
+        await fs.writeFile(targetPath, content, 'utf-8');
+      }
+    }
+  }
+
+  /**
+   * Uninstall a skill from ~/.claude/skills/
+   */
+  async uninstallSkill(skillId: string): Promise<{ success: boolean; message: string }> {
+    const globalSkillsPath = join(homedir(), '.claude', 'skills');
+    const targetPath = join(globalSkillsPath, skillId);
+
+    if (!existsSync(targetPath)) {
+      return { success: false, message: `Skill "${skillId}" is not installed` };
+    }
+
+    try {
+      await fs.rm(targetPath, { recursive: true, force: true });
+      return { success: true, message: `Skill "${skillId}" uninstalled successfully` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, message: `Failed to uninstall skill: ${message}` };
+    }
+  }
+
+  // Legacy method for backward compatibility
   getGalleryItems(): GalleryItem[] {
-    return GALLERY_ITEMS;
+    return [];
+  }
+
+  /**
+   * Get all global skills from ~/.claude/skills/
+   */
+  async getGlobalSkills(): Promise<SkillItem[]> {
+    const globalSkillsPath = join(homedir(), '.claude', 'skills');
+    return this.scanSkillsDirectory(globalSkillsPath, 'global');
+  }
+
+  /**
+   * Get local skills from a specific project
+   */
+  async getLocalSkills(projectPath: string): Promise<SkillItem[]> {
+    const localSkillsPath = join(projectPath, '.claude', 'skills');
+    return this.scanSkillsDirectory(localSkillsPath, 'local');
+  }
+
+  /**
+   * Get all skills (global + local from all projects)
+   */
+  async getAllSkills(): Promise<SkillItem[]> {
+    const skills: SkillItem[] = [];
+
+    // Get global skills
+    const globalSkills = await this.getGlobalSkills();
+    skills.push(...globalSkills);
+
+    // Get local skills from all projects
+    const projects = await this.listProjects();
+    for (const project of projects) {
+      const localSkills = await this.getLocalSkills(project.path);
+      skills.push(...localSkills);
+    }
+
+    return skills;
+  }
+
+  /**
+   * Scan a skills directory and return SkillItem array
+   */
+  private async scanSkillsDirectory(skillsPath: string, source: SkillSource): Promise<SkillItem[]> {
+    if (!existsSync(skillsPath)) {
+      return [];
+    }
+
+    const skills: SkillItem[] = [];
+    const entries = await fs.readdir(skillsPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      // Skip hidden files and symlinks (for now)
+      if (entry.name.startsWith('.')) continue;
+
+      const skillPath = join(skillsPath, entry.name);
+
+      // Handle symlinks - resolve them
+      let realPath = skillPath;
+      let isDir = entry.isDirectory();
+
+      if (entry.isSymbolicLink()) {
+        try {
+          realPath = await fs.realpath(skillPath);
+          const stat = await fs.stat(realPath);
+          isDir = stat.isDirectory();
+        } catch {
+          // Skip broken symlinks
+          continue;
+        }
+      }
+
+      if (!isDir) continue;
+
+      const skill = await this.loadSkillInfo(realPath, entry.name, source);
+      if (skill) {
+        skills.push(skill);
+      }
+    }
+
+    return skills;
+  }
+
+  /**
+   * Load skill info from SKILL.md
+   */
+  private async loadSkillInfo(skillPath: string, dirName: string, source: SkillSource): Promise<SkillItem | null> {
+    try {
+      const skillMdPath = join(skillPath, 'SKILL.md');
+
+      if (!existsSync(skillMdPath)) {
+        return null;
+      }
+
+      const content = await fs.readFile(skillMdPath, 'utf-8');
+      const { name, description, tags } = this.parseSkillFrontmatter(content, dirName);
+
+      // Check for scripts and requirements
+      const scriptsPath = join(skillPath, 'scripts');
+      const requirementsPath = join(skillPath, 'requirements.txt');
+
+      const hasScripts = existsSync(scriptsPath);
+      const hasRequirements = existsSync(requirementsPath);
+
+      return {
+        id: `${source}-${dirName}`,
+        name,
+        description,
+        source,
+        path: skillPath,
+        tags,
+        hasScripts,
+        hasRequirements,
+      };
+    } catch (error) {
+      console.error(`Failed to load skill info for ${dirName}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse YAML frontmatter from SKILL.md
+   */
+  private parseSkillFrontmatter(content: string, fallbackName: string): { name: string; description: string; tags: string[] } {
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+
+    if (!frontmatterMatch) {
+      // Try to get description from first heading or paragraph
+      const headingMatch = content.match(/^#\s+(.+)/m);
+      return {
+        name: fallbackName,
+        description: headingMatch ? headingMatch[1] : '',
+        tags: [],
+      };
+    }
+
+    const frontmatter = frontmatterMatch[1];
+
+    // Parse name
+    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+    const name = nameMatch ? nameMatch[1].trim() : fallbackName;
+
+    // Parse description (handle multiline YAML)
+    let description = '';
+    const descMatch = frontmatter.match(/^description:\s*(?:>-?\s*\n([\s\S]*?)(?=\n\w|$)|(.+))$/m);
+    if (descMatch) {
+      if (descMatch[1]) {
+        // Multiline description
+        description = descMatch[1]
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line)
+          .join(' ');
+      } else if (descMatch[2]) {
+        // Single line description
+        description = descMatch[2].trim();
+      }
+    }
+
+    // Parse tags if present
+    const tags: string[] = [];
+    const tagsMatch = frontmatter.match(/^tags:\s*\[(.*)\]/m);
+    if (tagsMatch) {
+      tags.push(...tagsMatch[1].split(',').map(t => t.trim().replace(/['"]/g, '')));
+    }
+
+    return { name, description, tags };
   }
 
   async createSampleProjects(): Promise<void> {
