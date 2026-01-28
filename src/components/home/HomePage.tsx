@@ -3,27 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Settings, RefreshCw } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExecutionStore } from '../../stores/executionStore';
+import { useWorkflowStore } from '../../stores/workflowStore';
 import ProjectCard from './ProjectCard';
-import SkillCard from './SkillCard';
+import WorkflowCard from './WorkflowCard';
 import CreateProjectDialog from './CreateProjectDialog';
 import SettingsDialog from '../dialogs/SettingsDialog';
 import RightSidebar from '../layout/RightSidebar';
 import BottomConsolePanel from '../layout/BottomConsolePanel';
 import { usePanelStore } from '../../stores/panelStore';
+import type { WorkflowTemplate } from '../../types/project';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const {
     projects,
-    gallerySkills,
+    workflowTemplates,
     isLoading,
-    isLoadingGallery,
-    installingSkillId,
+    isLoadingWorkflows,
     fetchProjects,
-    fetchGallerySkills,
-    installSkill,
-    uninstallSkill,
+    fetchWorkflowTemplates,
+    getWorkflowData,
     createProject,
     deleteProject,
     copyProject,
@@ -35,12 +35,15 @@ export default function HomePage() {
     makeccHome,
   } = useProjectStore();
 
+  const { setNodes, setEdges, setWorkflowName } = useWorkflowStore();
   const { addLog } = useExecutionStore();
   const { isCollapsed, width } = usePanelStore();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [loadingWorkflowId, setLoadingWorkflowId] = useState<string | null>(null);
 
   // Track previous currentProject to detect changes from Explorer navigation
   const prevProjectRef = useRef<typeof currentProject>(currentProject);
@@ -48,8 +51,8 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchProjects();
-    fetchGallerySkills();
-  }, [fetchProjects, fetchGallerySkills]);
+    fetchWorkflowTemplates();
+  }, [fetchProjects, fetchWorkflowTemplates]);
 
   // Sync Explorer to home when HomePage mounts
   useEffect(() => {
@@ -127,37 +130,54 @@ export default function HomePage() {
     }
   };
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const handleWorkflowClick = async (workflow: WorkflowTemplate) => {
+    setLoadingWorkflowId(workflow.id);
+    addLog('info', `Loading workflow template: ${workflow.name}`);
 
-  const filteredSkills = gallerySkills.filter((skill) => {
+    try {
+      // 1. Get workflow data from GitHub
+      const workflowData = await getWorkflowData(workflow.id);
+      if (!workflowData) {
+        addLog('error', `Failed to load workflow: ${workflow.id}`);
+        return;
+      }
+
+      // 2. Create new project
+      const project = await createProject(workflow.name, workflow.description);
+      if (!project) {
+        addLog('error', 'Failed to create project');
+        return;
+      }
+
+      // 3. Load workflow into store
+      setWorkflowName(workflowData.name);
+      setNodes(workflowData.nodes as any[]);
+      setEdges(workflowData.edges as any[]);
+
+      // 4. Navigate to project
+      setCurrentProject(project);
+      if (project.path) {
+        navigateToPath(project.path);
+      }
+      addLog('info', `Created project from template: ${project.name}`);
+      navigate(`/project/${encodeURIComponent(project.name)}`);
+    } catch (error) {
+      console.error('Failed to create project from workflow:', error);
+      addLog('error', 'Failed to create project from workflow');
+    } finally {
+      setLoadingWorkflowId(null);
+    }
+  };
+
+  const filteredWorkflows = workflowTemplates.filter((workflow) => {
     const matchesSearch =
-      skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      skill.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || skill.category === selectedCategory;
+      workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      workflow.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || workflow.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const categories = ['all', ...new Set(gallerySkills.map((s) => s.category))];
-
-  const handleInstallSkill = async (skillId: string) => {
-    const result = await installSkill(skillId);
-    if (result.success) {
-      addLog('info', `Skill "${skillId}" installed successfully`);
-    } else {
-      addLog('error', `Failed to install skill: ${result.message}`);
-    }
-  };
-
-  const handleUninstallSkill = async (skillId: string) => {
-    if (window.confirm(`"${skillId}" 스킬을 삭제하시겠습니까?`)) {
-      const result = await uninstallSkill(skillId);
-      if (result.success) {
-        addLog('info', `Skill "${skillId}" uninstalled`);
-      } else {
-        addLog('error', `Failed to uninstall skill: ${result.message}`);
-      }
-    }
-  };
+  const categories = ['all', ...new Set(workflowTemplates.map((w) => w.category))];
 
   return (
     <div className="h-screen flex flex-col bg-canvas overflow-hidden">
@@ -195,14 +215,14 @@ export default function HomePage() {
           {/* Hero text */}
           <div className="text-center mb-10">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
-              Build, edit and share AI skills
+              Build AI workflows visually
               <br />
-              <span className="text-gray-400">using natural language</span>
+              <span className="text-gray-400">with drag & drop</span>
             </h1>
           </div>
 
           {/* Your projects section */}
-          <section className="mb-12 max-w-4xl mx-auto">
+          <section className="mb-12 max-w-5xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-white">Your projects</h2>
               <button
@@ -224,7 +244,7 @@ export default function HomePage() {
                   <Plus className="w-8 h-8 text-gray-600" />
                 </div>
                 <h3 className="text-lg font-medium text-white mb-2">No projects yet</h3>
-                <p className="text-gray-400 mb-4">Create your first project to get started</p>
+                <p className="text-gray-400 mb-4">Create a new project or use a template below</p>
                 <button
                   onClick={() => setIsCreateDialogOpen(true)}
                   className="px-6 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white transition-colors"
@@ -248,23 +268,23 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* Skill Gallery section */}
+          {/* Workflow Gallery section */}
           <section className="max-w-5xl mx-auto pb-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-semibold text-white">Skill Gallery</h2>
+                <h2 className="text-xl font-semibold text-white">Workflow Templates</h2>
                 <span className="px-2 py-0.5 text-xs font-medium bg-accent/20 text-accent rounded-full">
-                  {gallerySkills.length} skills
+                  {workflowTemplates.length} templates
                 </span>
               </div>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => fetchGallerySkills()}
-                  disabled={isLoadingGallery}
+                  onClick={() => fetchWorkflowTemplates()}
+                  disabled={isLoadingWorkflows}
                   className="p-2 hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-50"
                   title="Refresh"
                 >
-                  <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoadingGallery ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoadingWorkflows ? 'animate-spin' : ''}`} />
                 </button>
                 <div className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg">
                   <Search className="w-4 h-4 text-gray-500" />
@@ -272,7 +292,7 @@ export default function HomePage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search skills..."
+                    placeholder="Search templates..."
                     className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 w-40"
                   />
                 </div>
@@ -291,30 +311,29 @@ export default function HomePage() {
                       : 'bg-surface border border-border text-gray-400 hover:text-white hover:border-gray-600'
                   }`}
                 >
-                  {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ')}
+                  {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1)}
                 </button>
               ))}
             </div>
 
-            {isLoadingGallery ? (
+            {isLoadingWorkflows ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               </div>
-            ) : filteredSkills.length === 0 ? (
+            ) : filteredWorkflows.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 {searchQuery || selectedCategory !== 'all'
-                  ? 'No skills found matching your criteria'
-                  : 'No skills available'}
+                  ? 'No templates found matching your criteria'
+                  : 'No templates available'}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-4">
-                {filteredSkills.map((skill) => (
-                  <SkillCard
-                    key={skill.id}
-                    skill={skill}
-                    isInstalling={installingSkillId === skill.id}
-                    onInstall={() => handleInstallSkill(skill.id)}
-                    onUninstall={() => handleUninstallSkill(skill.id)}
+              <div className="flex flex-wrap gap-6">
+                {filteredWorkflows.map((workflow) => (
+                  <WorkflowCard
+                    key={workflow.id}
+                    workflow={workflow}
+                    onClick={() => handleWorkflowClick(workflow)}
+                    isLoading={loadingWorkflowId === workflow.id}
                   />
                 ))}
               </div>

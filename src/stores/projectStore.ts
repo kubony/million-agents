@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, GalleryItem, GallerySkill } from '../types/project';
+import type { Project, GalleryItem, GallerySkill, WorkflowTemplate, WorkflowData } from '../types/project';
 import type { FileItem } from '../types/file';
 
 interface ProjectStore {
@@ -7,8 +7,10 @@ interface ProjectStore {
   projects: Project[];
   galleryItems: GalleryItem[];
   gallerySkills: GallerySkill[];
+  workflowTemplates: WorkflowTemplate[];
   isLoading: boolean;
   isLoadingGallery: boolean;
+  isLoadingWorkflows: boolean;
   installingSkillId: string | null;
   error: string | null;
   currentProject: Project | null;
@@ -39,6 +41,11 @@ interface ProjectStore {
   installSkill: (skillId: string) => Promise<{ success: boolean; message: string }>;
   uninstallSkill: (skillId: string) => Promise<{ success: boolean; message: string }>;
 
+  // Workflow gallery actions
+  fetchWorkflowTemplates: () => Promise<void>;
+  getWorkflowData: (workflowId: string) => Promise<WorkflowData | null>;
+  createProjectFromWorkflow: (workflowId: string) => Promise<Project | null>;
+
   // File explorer actions
   fetchFiles: (path?: string) => Promise<void>;
   navigateToPath: (path: string) => Promise<void>;
@@ -53,8 +60,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   galleryItems: [],
   gallerySkills: [],
+  workflowTemplates: [],
   isLoading: false,
   isLoadingGallery: false,
+  isLoadingWorkflows: false,
   installingSkillId: null,
   error: null,
   currentProject: null,
@@ -336,5 +345,51 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     } finally {
       set({ installingSkillId: null });
     }
+  },
+
+  // Workflow gallery actions
+  fetchWorkflowTemplates: async () => {
+    set({ isLoadingWorkflows: true });
+    try {
+      const response = await fetch('/api/gallery/workflows');
+      if (!response.ok) {
+        throw new Error('Failed to fetch workflow templates');
+      }
+      const data = await response.json();
+      set({ workflowTemplates: data.workflows || [] });
+    } catch (error) {
+      console.error('Failed to fetch workflow templates:', error);
+      set({ workflowTemplates: [] });
+    } finally {
+      set({ isLoadingWorkflows: false });
+    }
+  },
+
+  getWorkflowData: async (workflowId: string) => {
+    try {
+      const response = await fetch(`/api/gallery/workflows/${workflowId}`);
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return data as WorkflowData;
+    } catch (error) {
+      console.error('Failed to fetch workflow data:', error);
+      return null;
+    }
+  },
+
+  createProjectFromWorkflow: async (workflowId: string) => {
+    const { workflowTemplates, createProject } = get();
+    const template = workflowTemplates.find((w) => w.id === workflowId);
+
+    if (!template) {
+      console.error('Workflow template not found:', workflowId);
+      return null;
+    }
+
+    // Create project with workflow name
+    const project = await createProject(template.name, template.description);
+    return project;
   },
 }));

@@ -48,3 +48,22 @@ export interface GallerySkill {
   hasRequirements: boolean;
   installed?: boolean;
 }
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  author: string;
+  tags: string[];
+  thumbnail?: string;
+  file: string;
+}
+
+export interface WorkflowData {
+  id: string;
+  name: string;
+  description: string;
+  nodes: unknown[];
+  edges: unknown[];
+}

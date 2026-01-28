@@ -138,6 +138,38 @@ app.delete('/api/gallery/skills/:id', async (req, res) => {
   }
 });
 
+// ============================================
+// Workflow Gallery API
+// ============================================
+
+// Get workflow templates from GitHub
+app.get('/api/gallery/workflows', async (req, res) => {
+  try {
+    const workflows = await projectService.fetchWorkflowTemplates();
+    res.json({ workflows });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Fetch workflows error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// Get workflow data by ID
+app.get('/api/gallery/workflows/:id', async (req, res) => {
+  try {
+    const data = await projectService.getWorkflowData(req.params.id);
+    if (data) {
+      res.json(data);
+    } else {
+      res.status(404).json({ message: 'Workflow not found' });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Get workflow error:', errorMessage);
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
 // Create a new project
 app.post('/api/projects', async (req, res) => {
   try {

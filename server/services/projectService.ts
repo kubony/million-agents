@@ -45,12 +45,20 @@ const MAKECC_HOME = process.env.MAKECC_HOME || join(homedir(), 'makecc');
 const GALLERY_REPO = 'kubony/makecc-gallery';
 const GALLERY_RAW_URL = `https://raw.githubusercontent.com/${GALLERY_REPO}/main`;
 const GALLERY_JSON_URL = `${GALLERY_RAW_URL}/gallery.json`;
+const WORKFLOWS_JSON_URL = `${GALLERY_RAW_URL}/workflows.json`;
 
 // Cache for gallery data
 let galleryCache: { data: GallerySkill[] | null; timestamp: number } = {
   data: null,
   timestamp: 0,
 };
+
+// Cache for workflows data
+let workflowsCache: { data: WorkflowTemplate[] | null; timestamp: number } = {
+  data: null,
+  timestamp: 0,
+};
+
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export interface GallerySkill {
@@ -74,6 +82,26 @@ interface GitHubContent {
   type: 'file' | 'dir';
   url: string;
   download_url?: string;
+}
+
+// Workflow template types
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  author: string;
+  tags: string[];
+  thumbnail?: string;
+  file: string;
+}
+
+export interface WorkflowData {
+  id: string;
+  name: string;
+  description: string;
+  nodes: unknown[];
+  edges: unknown[];
 }
 
 class ProjectService {
@@ -466,6 +494,64 @@ ${sanitizedName}/
   // Legacy method for backward compatibility
   getGalleryItems(): GalleryItem[] {
     return [];
+  }
+
+  /**
+   * Fetch workflow templates from GitHub
+   */
+  async fetchWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+    // Check cache
+    const now = Date.now();
+    if (workflowsCache.data && now - workflowsCache.timestamp < CACHE_TTL) {
+      return workflowsCache.data;
+    }
+
+    try {
+      const response = await fetch(WORKFLOWS_JSON_URL);
+      if (!response.ok) {
+        console.error(`Failed to fetch workflows: ${response.status}`);
+        return workflowsCache.data || [];
+      }
+
+      const data = await response.json() as { workflows?: WorkflowTemplate[] };
+      const workflows = data.workflows || [];
+
+      // Update cache
+      workflowsCache = { data: workflows, timestamp: now };
+
+      return workflows;
+    } catch (error) {
+      console.error('Error fetching workflows:', error);
+      return workflowsCache.data || [];
+    }
+  }
+
+  /**
+   * Get workflow data by ID
+   */
+  async getWorkflowData(workflowId: string): Promise<WorkflowData | null> {
+    const templates = await this.fetchWorkflowTemplates();
+    const template = templates.find(t => t.id === workflowId);
+
+    if (!template) {
+      return null;
+    }
+
+    try {
+      const workflowUrl = `${GALLERY_RAW_URL}/${template.file}`;
+      const response = await fetch(workflowUrl);
+
+      if (!response.ok) {
+        console.error(`Failed to fetch workflow data: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json() as WorkflowData;
+      return data;
+    } catch (error) {
+      console.error('Error fetching workflow data:', error);
+      return null;
+    }
   }
 
   /**
