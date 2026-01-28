@@ -5,6 +5,7 @@ import {
   Controls,
   MiniMap,
   addEdge,
+  useReactFlow,
   type OnConnect,
   type NodeTypes,
   type Node,
@@ -15,6 +16,7 @@ import {
   applyEdgeChanges,
   BackgroundVariant,
 } from '@xyflow/react';
+import { nanoid } from 'nanoid';
 
 import InputNode from '../nodes/InputNode';
 import AgentNode from '../nodes/AgentNode';
@@ -23,9 +25,12 @@ import HookNode from '../nodes/HookNode';
 import OutputNode from '../nodes/OutputNode';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { usePanelStore } from '../../stores/panelStore';
+import { useExecutionStore } from '../../stores/executionStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { validateConnection } from '../../utils/connectionValidator';
 import { syncEdge, removeEdge as removeEdgeSync, deleteNode } from '../../services/syncService';
-import type { WorkflowNode, WorkflowEdge } from '../../types/nodes';
+import type { WorkflowNode, WorkflowEdge, SkillNodeData } from '../../types/nodes';
+import type { GallerySkill } from '../../types/project';
 
 const nodeTypes: NodeTypes = {
   input: InputNode,
@@ -36,16 +41,22 @@ const nodeTypes: NodeTypes = {
 };
 
 export default function FlowCanvas() {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
+
   const {
     nodes,
     edges,
     setNodes,
     setEdges,
     addEdge: storeAddEdge,
+    addNode,
     setSelectedNode,
   } = useWorkflowStore();
 
   const openStepPanel = usePanelStore((state) => state.openStepPanel);
+  const { addLog } = useExecutionStore();
+  const { installSkill } = useProjectStore();
 
   // Track if Shift key is pressed for auto-connect feature
   const [isShiftPressed, setIsShiftPressed] = useState(false);
@@ -252,31 +263,98 @@ export default function FlowCanvas() {
     setSelectedNode(null);
   }, [setSelectedNode]);
 
+  // Handle drag over for gallery skills
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  // Handle drop for gallery skills
+  const onDrop = useCallback(
+    async (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const data = event.dataTransfer.getData('application/json');
+      if (!data) return;
+
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.type !== 'gallery-skill') return;
+
+        const skill = parsed.skill as GallerySkill;
+
+        // Calculate drop position
+        const position = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        // Install skill if not already installed
+        if (!skill.installed) {
+          addLog('info', `Installing skill "${skill.id}"...`);
+          const result = await installSkill(skill.id);
+          if (!result.success) {
+            addLog('error', `Failed to install skill: ${result.message}`);
+            return;
+          }
+          addLog('info', `Skill "${skill.id}" installed`);
+        }
+
+        // Create skill node
+        const nodeData: SkillNodeData = {
+          label: skill.name,
+          description: skill.description,
+          status: 'idle',
+          skillType: 'official',
+          skillId: skill.id,
+          skillCategory: skill.category,
+          skillPath: `~/.claude/skills/${skill.id}`,
+        };
+
+        const newNode: WorkflowNode = {
+          id: `skill-${nanoid(8)}`,
+          type: 'skill',
+          position,
+          data: nodeData,
+        };
+
+        addNode(newNode);
+        addLog('info', `Added skill node: ${skill.name}`);
+      } catch (error) {
+        console.error('Failed to handle drop:', error);
+      }
+    },
+    [screenToFlowPosition, addNode, addLog, installSkill]
+  );
+
   return (
     <>
-      <ReactFlow
-        nodes={nodes as Node[]}
-        edges={edges}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onConnect={onConnect}
-        onSelectionChange={onSelectionChange}
-        onNodeClick={onNodeClick}
-        onPaneClick={onPaneClick}
-        nodeTypes={nodeTypes}
-        defaultViewport={{ x: 100, y: 100, zoom: 0.7 }}
-        defaultEdgeOptions={{
-          animated: true,
-          style: { strokeDasharray: '5 5' },
-        }}
-        connectionLineStyle={{ strokeDasharray: '5 5' }}
-        snapToGrid
-        snapGrid={[15, 15]}
-        connectionRadius={40}
-        connectOnClick={true}
-        selectionOnDrag={false}
-        multiSelectionKeyCode="Shift"
-      >
+      <div ref={reactFlowWrapper} className="w-full h-full">
+        <ReactFlow
+          nodes={nodes as Node[]}
+          edges={edges}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
+          onConnect={onConnect}
+          onSelectionChange={onSelectionChange}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          nodeTypes={nodeTypes}
+          defaultViewport={{ x: 100, y: 100, zoom: 0.7 }}
+          defaultEdgeOptions={{
+            animated: true,
+            style: { strokeDasharray: '5 5' },
+          }}
+          connectionLineStyle={{ strokeDasharray: '5 5' }}
+          snapToGrid
+          snapGrid={[15, 15]}
+          connectionRadius={40}
+          connectOnClick={true}
+          selectionOnDrag={false}
+          multiSelectionKeyCode="Shift"
+        >
         <Background
           variant={BackgroundVariant.Dots}
           gap={20}
@@ -303,7 +381,8 @@ export default function FlowCanvas() {
           }}
           maskColor="rgba(0, 0, 0, 0.8)"
         />
-      </ReactFlow>
+        </ReactFlow>
+      </div>
 
       {/* Node Deletion Confirmation Dialog */}
       {pendingDeletion && (

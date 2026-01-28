@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Save, Download, Play, Trash2, RefreshCw, Home } from 'lucide-react';
+import { Settings, Save, Download, Play, Trash2, RefreshCw, Home, Plus } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
@@ -8,6 +8,7 @@ import { generateClaudeConfig } from '../../utils/claudeConfigGenerator';
 import { loadClaudeConfig } from '../../services/configLoader';
 import SaveDialog from '../dialogs/SaveDialog';
 import SettingsDialog from '../dialogs/SettingsDialog';
+import GalleryModal from '../modals/GalleryModal';
 import type { ClaudeConfigExport } from '../../types/save';
 
 export default function Header() {
@@ -17,6 +18,7 @@ export default function Header() {
   const { isRunning, execute } = useWorkflowExecution();
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [exportConfig, setExportConfig] = useState<ClaudeConfigExport | null>(null);
   const [isReloading, setIsReloading] = useState(false);
 
@@ -100,7 +102,16 @@ export default function Header() {
 
       {/* Right section */}
       <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-500">Saved</span>
+        <button
+          onClick={() => setIsGalleryOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors"
+          title="Add skill from gallery"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="text-sm font-medium">Add Skill</span>
+        </button>
+
+        <div className="w-px h-6 bg-border mx-1" />
 
         <button
           onClick={handleRun}
@@ -183,6 +194,12 @@ export default function Header() {
       <SettingsDialog
         isOpen={isSettingsDialogOpen}
         onClose={() => setIsSettingsDialogOpen(false)}
+      />
+
+      {/* Gallery Modal */}
+      <GalleryModal
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
       />
     </header>
   );
