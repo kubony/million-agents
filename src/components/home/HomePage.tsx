@@ -33,6 +33,9 @@ export default function HomePage() {
     setHomeScrollPosition,
     currentProject,
     makeccHome,
+    gallerySkills,
+    fetchGallerySkills,
+    installSkill,
   } = useProjectStore();
 
   const { setNodes, setEdges, setWorkflowName } = useWorkflowStore();
@@ -52,7 +55,8 @@ export default function HomePage() {
   useEffect(() => {
     fetchProjects();
     fetchWorkflowTemplates();
-  }, [fetchProjects, fetchWorkflowTemplates]);
+    fetchGallerySkills();
+  }, [fetchProjects, fetchWorkflowTemplates, fetchGallerySkills]);
 
   // Sync Explorer to home when HomePage mounts
   useEffect(() => {
@@ -142,19 +146,42 @@ export default function HomePage() {
         return;
       }
 
-      // 2. Create new project
+      // 2. Extract required skills from workflow nodes and install them
+      const skillNodes = workflowData.nodes.filter(
+        (node: any) => node.type === 'skill' && node.data?.skillId
+      );
+      const requiredSkillIds = [...new Set(skillNodes.map((node: any) => node.data.skillId))] as string[];
+
+      if (requiredSkillIds.length > 0) {
+        addLog('info', `Installing required skills: ${requiredSkillIds.join(', ')}`);
+
+        for (const skillId of requiredSkillIds) {
+          const gallerySkill = gallerySkills.find((s) => s.id === skillId);
+          if (gallerySkill && !gallerySkill.installed) {
+            addLog('info', `Installing skill: ${skillId}`);
+            const result = await installSkill(skillId);
+            if (result.success) {
+              addLog('info', `Skill installed: ${skillId}`);
+            } else {
+              addLog('warning', `Failed to install skill ${skillId}: ${result.message}`);
+            }
+          }
+        }
+      }
+
+      // 3. Create new project
       const project = await createProject(workflow.name, workflow.description);
       if (!project) {
         addLog('error', 'Failed to create project');
         return;
       }
 
-      // 3. Load workflow into store
+      // 4. Load workflow into store
       setWorkflowName(workflowData.name);
       setNodes(workflowData.nodes as any[]);
       setEdges(workflowData.edges as any[]);
 
-      // 4. Navigate to project
+      // 5. Navigate to project
       setCurrentProject(project);
       if (project.path) {
         navigateToPath(project.path);
